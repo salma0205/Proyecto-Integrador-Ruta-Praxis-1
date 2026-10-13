@@ -1,0 +1,374 @@
+/* Selecciona todos los elementos de la pagina. */
+* {
+    /* Quita el margen que el navegador coloca por defecto. */
+    margin: 0;
+
+    /* Quita el relleno interno que algunos elementos traen por defecto. */
+    padding: 0;
+
+    /* Hace que el ancho y alto incluyan el borde y el padding. */
+    box-sizing: border-box;
+}
+
+/* Estilos generales del cuerpo de la pagina. */
+body {
+    /* Hace que el body ocupe como minimo toda la altura de la pantalla. */
+    min-height: 100vh;
+
+    /* Define la fuente principal de todo el documento. */
+    font-family: Arial, sans-serif;
+
+    /* Define el color general del texto como blanco. */
+    color: #ffffff;
+
+    /* Color de respaldo por si la imagen de fondo no carga. */
+    background-color: #071827;
+}
+
+/* Contenedor principal de la pantalla de login. */
+.pagina-login {
+    /* Ocupa todo el ancho disponible. */
+    width: 100%;
+
+    /* Ocupa como minimo toda la altura visible de la pantalla. */
+    min-height: 100vh;
+
+    /* Activa Flexbox para poder centrar el panel. */
+    display: flex;
+
+    /* Centra el panel horizontalmente. */
+    justify-content: center;
+
+    /* Centra el panel verticalmente. */
+    align-items: center;
+
+    /* Deja espacio alrededor para que el panel no toque los bordes. */
+    padding: 24px;
+
+    /* Coloca una capa oscura y encima carga la imagen de fondo desde la carpeta img. */
+    background:
+        linear-gradient(rgba(3, 12, 24, 0.28), rgba(3, 12, 24, 0.64)),
+        url("../img/fondo-ruta-praxis.svg") center / cover no-repeat;
+}
+
+/* Panel central donde esta el formulario. */
+.panel-login {
+    /* El panel mide maximo 440px, pero en pantallas pequenas usa el 92% del ancho. */
+    width: min(92vw, 440px);
+
+    /* Espacio interno: arriba, lados y abajo. */
+    padding: 42px 38px 36px;
+
+    /* Borde azul claro con transparencia. */
+    border: 1px solid rgba(144, 221, 255, 0.26);
+
+    /* Redondea suavemente las esquinas del panel. */
+    border-radius: 8px;
+
+    /* Fondo oscuro semitransparente para que se vea el fondo detras. */
+    background: rgba(7, 18, 34, 0.58);
+
+    /* Sombra para separar visualmente el panel del fondo. */
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+
+    /* Aplica desenfoque al fondo que se ve detras del panel. */
+    backdrop-filter: blur(12px);
+}
+
+/* Titulo principal dentro del panel. */
+.panel-login h1 {
+    /* Espacio debajo del titulo. */
+    margin-bottom: 30px;
+
+    /* Centra el texto. */
+    text-align: center;
+
+    /* Usa una fuente con estilo mas elegante para el titulo. */
+    font-family: Georgia, serif;
+
+    /* Tamano grande del titulo. */
+    font-size: 38px;
+
+    /* Hace el texto mas grueso. */
+    font-weight: 700;
+
+    /* Ajusta la separacion vertical entre lineas. */
+    line-height: 1.08;
+
+    /* Color blanco suave para el titulo. */
+    color: #f7fbff;
+}
+
+/* Formulario que contiene todos los campos. */
+.formulario-login {
+    /* Organiza los campos en forma de columna. */
+    display: grid;
+
+    /* Espacio entre cada campo del formulario. */
+    gap: 18px;
+}
+
+/* Estilo general de cada campo del formulario. */
+.campo {
+    /* Ocupa todo el ancho del formulario. */
+    width: 100%;
+
+    /* Altura fija para que todos los campos se vean iguales. */
+    height: 44px;
+
+    /* Activa Flexbox para alinear icono y control. */
+    display: flex;
+
+    /* Centra verticalmente el contenido del campo. */
+    align-items: center;
+
+    /* Espacio entre el icono y el input o select. */
+    gap: 11px;
+
+    /* Quita el borde completo. */
+    border: none;
+
+    /* Deja solo una linea inferior clara. */
+    border-bottom: 1px solid rgba(227, 244, 255, 0.72);
+
+    /* Color del texto dentro del campo. */
+    color: #eef9ff;
+}
+
+/* Iconos ubicados dentro de los campos. */
+.campo i {
+    /* Reserva el mismo ancho para todos los iconos. */
+    width: 18px;
+
+    /* Color azul claro de los iconos. */
+    color: #7ddcff;
+
+    /* Tamano de los iconos. */
+    font-size: 16px;
+}
+
+/* Estilos compartidos para inputs y select. */
+.campo input,
+.campo select {
+    /* Ocupan todo el ancho libre del campo. */
+    width: 100%;
+
+    /* Ocupan toda la altura del campo. */
+    height: 100%;
+
+    /* Quita el borde predeterminado. */
+    border: none;
+
+    /* Quita el contorno predeterminado al hacer clic. */
+    outline: none;
+
+    /* Mantiene el fondo transparente. */
+    background: transparent;
+
+    /* Color del texto escrito. */
+    color: #ffffff;
+
+    /* Tamano del texto de los campos. */
+    font-size: 14px;
+}
+
+/* Estilos especificos del menu desplegable de roles. */
+.campo select {
+    /* Cambia el cursor a mano cuando se pasa encima. */
+    cursor: pointer;
+
+    /* Redondea un poco el select. */
+    border-radius: 4px;
+
+    /* Da espacio interno a los lados. */
+    padding: 0 8px;
+
+    /* Evita que el select se vea blanco y lo integra con el panel. */
+    background-color: rgba(9, 26, 46, 0.75);
+
+    /* Color del texto del select. */
+    color: rgba(240, 248, 255, 0.9);
+}
+
+/* Opciones que aparecen al desplegar el select. */
+.campo select option {
+    /* Color del texto de cada opcion. */
+    color: #eef9ff;
+
+    /* Fondo azul oscuro de cada opcion. */
+    background: #091a2e;
+}
+
+/* Texto guia de los inputs, como "Correo electronico". */
+.campo input::placeholder {
+    /* Color claro y un poco transparente del texto guia. */
+    color: rgba(240, 248, 255, 0.82);
+
+    /* Mantiene visible el color definido. */
+    opacity: 1;
+}
+
+/* Texto guia cuando el usuario hace clic dentro del input. */
+.campo input:focus::placeholder {
+    /* Oculta el texto guia mientras se escribe. */
+    color: transparent;
+}
+
+/* Corrige el color que pone el navegador cuando autocompleta campos. */
+.campo input:-webkit-autofill,
+.campo input:-webkit-autofill:hover,
+.campo input:-webkit-autofill:focus,
+.campo input:-webkit-autofill:active {
+    /* Mantiene el texto autocompletado en blanco. */
+    -webkit-text-fill-color: #ffffff;
+
+    /* Mantiene el cursor de escritura en blanco. */
+    caret-color: #ffffff;
+
+    /* Cubre el fondo blanco del autocompletado con azul oscuro. */
+    box-shadow: 0 0 0 1000px rgba(9, 26, 46, 0.75) inset;
+
+    /* Evita que el navegador cambie rapidamente el fondo del campo. */
+    transition: background-color 9999s ease-in-out 0s;
+}
+
+/* Contenedor de "Recordarme" y "Olvidaste tu contrasena". */
+.opciones-login {
+    /* Activa Flexbox para ubicar los elementos en fila. */
+    display: flex;
+
+    /* Coloca un elemento a la izquierda y otro a la derecha. */
+    justify-content: space-between;
+
+    /* Centra los elementos verticalmente. */
+    align-items: center;
+
+    /* Espacio entre el checkbox y el enlace. */
+    gap: 16px;
+
+    /* Color claro semitransparente del texto. */
+    color: rgba(240, 248, 255, 0.86);
+
+    /* Tamano pequeno para esta zona secundaria. */
+    font-size: 12px;
+}
+
+/* Grupo que contiene el checkbox y la palabra Recordarme. */
+.opciones-login label {
+    /* Alinea el checkbox y el texto en una misma fila. */
+    display: flex;
+
+    /* Centra verticalmente el checkbox con el texto. */
+    align-items: center;
+
+    /* Espacio entre el checkbox y el texto. */
+    gap: 7px;
+
+    /* Evita que el texto se parta en dos lineas. */
+    white-space: nowrap;
+}
+
+/* Estilo de la casilla de verificacion. */
+.opciones-login input {
+    /* Ancho del checkbox. */
+    width: 12px;
+
+    /* Alto del checkbox. */
+    height: 12px;
+
+    /* Color que toma el checkbox cuando esta marcado. */
+    accent-color: #7ddcff;
+}
+
+/* Enlace para recuperar contrasena. */
+.opciones-login a {
+    /* Color inicial del enlace. */
+    color: rgba(240, 248, 255, 0.86);
+
+    /* Quita el subrayado predeterminado. */
+    text-decoration: none;
+
+    /* Evita que el enlace se parta en varias lineas. */
+    white-space: nowrap;
+}
+
+/* Efecto del enlace cuando el mouse pasa encima. */
+.opciones-login a:hover {
+    /* Cambia el color del enlace a azul brillante. */
+    color: #7ddcff;
+}
+
+/* Estilos del boton principal. */
+button {
+    /* Hace que el boton ocupe todo el ancho del formulario. */
+    width: 100%;
+
+    /* Define la altura del boton. */
+    height: 44px;
+
+    /* Quita el borde predeterminado. */
+    border: none;
+
+    /* Redondea ligeramente las esquinas. */
+    border-radius: 4px;
+
+    /* Color claro del fondo del boton. */
+    background: #f5fbff;
+
+    /* Color oscuro del texto del boton. */
+    color: #102033;
+
+    /* Tamano del texto del boton. */
+    font-size: 14px;
+
+    /* Pone el texto del boton en negrita. */
+    font-weight: 700;
+
+    /* Cambia el cursor a mano al pasar encima. */
+    cursor: pointer;
+
+    /* Suaviza el cambio de color y el movimiento del hover. */
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+/* Efecto del boton cuando el mouse pasa encima. */
+button:hover {
+    /* Cambia el fondo del boton a azul claro. */
+    background: #cceeff;
+
+    /* Sube el boton un poco para dar sensacion de interaccion. */
+    transform: translateY(-1px);
+}
+
+/* Reglas para pantallas pequenas, como celulares. */
+@media (max-width: 520px) {
+    /* Ajustes del contenedor principal en celular. */
+    .pagina-login {
+        /* Reduce el espacio alrededor del panel. */
+        padding: 18px;
+    }
+
+    /* Ajustes del panel en celular. */
+    .panel-login {
+        /* Reduce el espacio interno del panel. */
+        padding: 34px 24px 30px;
+    }
+
+    /* Ajustes del titulo en celular. */
+    .panel-login h1 {
+        /* Reduce el tamano para que el titulo quepa mejor. */
+        font-size: 30px;
+    }
+
+    /* Ajustes de las opciones inferiores en celular. */
+    .opciones-login {
+        /* Alinea los elementos al inicio. */
+        align-items: flex-start;
+
+        /* Coloca "Recordarme" y el enlace uno debajo del otro. */
+        flex-direction: column;
+
+        /* Espacio entre los elementos cuando estan en columna. */
+        gap: 10px;
+    }
+}

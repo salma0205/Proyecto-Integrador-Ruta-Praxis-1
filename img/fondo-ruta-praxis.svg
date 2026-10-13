@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="glow" cx="72%" cy="4%" r="55%">
+      <stop offset="0" stop-color="#0fd7ff" stop-opacity=".48"/>
+      <stop offset=".28" stop-color="#174d8d" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#061423" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="3%" cy="60%" r="46%">
+      <stop offset="0" stop-color="#36e8ff" stop-opacity=".28"/>
+      <stop offset=".45" stop-color="#214b93" stop-opacity=".14"/>
+      <stop offset="1" stop-color="#061423" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="dots" width="34" height="34" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="#d6f8ff" opacity=".18"/>
+    </pattern>
+  </defs>
+
+  <rect width="1600" height="900" fill="#061423"/>
+  <rect width="1600" height="900" fill="url(#glow)"/>
+  <rect width="1600" height="900" fill="url(#glow2)"/>
+  <rect width="1600" height="900" fill="url(#dots)" opacity=".45"/>
+
+  <g fill="none" stroke="#2f5bff" stroke-width="3" opacity=".42">
+    <path d="M90 580 C220 510 330 560 465 430 S700 315 825 385 S1030 545 1180 430 S1390 260 1530 315"/>
+    <path d="M1160 145 L1278 226 L1398 190"/>
+    <path d="M96 678 L258 684 L410 598"/>
+  </g>
+
+  <g fill="none" stroke="#35dfff" stroke-width="4" filter="url(#soft-glow)">
+    <circle cx="1264" cy="125" r="116" opacity=".95"/>
+    <path d="M1196 100 L1264 62 L1334 100 L1264 140 Z"/>
+    <path d="M1218 113 V155 C1250 183 1284 183 1312 155 V113"/>
+    <path d="M1334 100 V148"/>
+    <circle cx="1334" cy="158" r="8" fill="#35dfff"/>
+
+    <circle cx="125" cy="622" r="118" opacity=".72"/>
+    <path d="M70 585 C98 570 126 570 154 585 V666 C126 650 98 650 70 666 Z"/>
+    <path d="M154 585 C182 570 210 570 238 585 V666 C210 650 182 650 154 666 Z"/>
+    <path d="M96 610 H131 M96 635 H131 M178 610 H213 M178 635 H213" opacity=".9"/>
+
+    <circle cx="475" cy="719" r="88" opacity=".7"/>
+    <circle cx="454" cy="701" r="42"/>
+    <path d="M489 736 L535 782"/>
+
+    <circle cx="1478" cy="178" r="67" opacity=".6"/>
+    <path d="M1448 176 C1458 138 1503 138 1510 174 C1514 195 1498 205 1498 222 H1460 C1460 205 1443 197 1448 176 Z"/>
+    <path d="M1465 240 H1493 M1468 256 H1490"/>
+  </g>
+
+  <g fill="none" stroke="#3753c8" stroke-width="3" opacity=".45">
+    <path d="M920 80 l42 -24 l42 24 v48 l-42 24 l-42 -24z"/>
+    <path d="M1004 32 l42 -24 l42 24 v48 l-42 24 l-42 -24z"/>
+    <path d="M1354 648 l42 -24 l42 24 v48 l-42 24 l-42 -24z"/>
+    <path d="M1450 610 l42 -24 l42 24 v48 l-42 24 l-42 -24z"/>
+    <path d="M310 432 l42 -24 l42 24 v48 l-42 24 l-42 -24z"/>
+    <path d="M415 483 l42 -24 l42 24 v48 l-42 24 l-42 -24z"/>
+  </g>
+
+  <g fill="#b7f3ff" opacity=".16">
+    <circle cx="210" cy="177" r="45"/>
+    <circle cx="342" cy="342" r="62"/>
+    <circle cx="1348" cy="410" r="43"/>
+    <circle cx="1532" cy="559" r="55"/>
+  </g>
+
+  <g fill="#44dfff" opacity=".34" font-family="Consolas, monospace" font-size="24">
+    <text x="38" y="58">[0110] 0130 | 01101]</text>
+    <text x="1322" y="706">[01101 0110]</text>
+  </g>
+</svg>

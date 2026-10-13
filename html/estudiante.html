@@ -1,0 +1,940 @@
+﻿<!DOCTYPE html>
+<!-- Indica que el documento esta escrito con HTML5. -->
+
+<html lang="es">
+<!-- Abre el documento HTML y define que el idioma principal es espanol. -->
+
+<head>
+    <!-- Abre la cabeza del documento, donde se colocan configuraciones y enlaces externos. -->
+
+    <meta charset="UTF-8">
+    <!-- Permite usar acentos, enes y caracteres especiales correctamente. -->
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Hace que la pagina se adapte a diferentes tamanos de pantalla. -->
+
+    <title>Estudiante - Ruta Praxis</title>
+    <!-- Define el titulo que aparece en la pestana del navegador. -->
+
+    <link rel="stylesheet" href="../css/estudiante.css">
+    <!-- Conecta esta pagina con su propio archivo CSS. -->
+
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Importa Font Awesome para usar iconos en el menu y en el contenido. -->
+</head>
+<!-- Cierra la cabeza del documento. -->
+
+<body>
+    <!-- Abre el cuerpo de la pagina, donde va todo lo visible. -->
+
+    <main class="pagina-estudiante">
+        <!-- Contenedor principal de la pagina del estudiante. -->
+
+        <aside class="menu-lateral">
+            <!-- Menu ubicado en la parte izquierda de la pantalla. -->
+
+            <h1>Ruta Praxis</h1>
+            <!-- Titulo del sistema dentro del menu lateral. -->
+
+            <details class="menu-desplegable" open>
+                <!-- Crea un menu desplegable sin usar JavaScript. -->
+
+                <summary>
+                    <!-- Encabezado del menu que se puede abrir y cerrar. -->
+
+                    <i class="fa-solid fa-bars"></i>
+                    <!-- Icono de menu. -->
+
+                    <span>Menu estudiante</span>
+                    <!-- Texto principal del menu desplegable. -->
+                </summary>
+                <!-- Cierra el encabezado del menu desplegable. -->
+
+                <nav class="opciones-estudiante">
+                    <!-- Agrupa las opciones de navegacion del estudiante. -->
+
+                    <a href="#inicio">
+                        <!-- Enlace a la seccion de inicio. -->
+
+                        <i class="fa-solid fa-house"></i>
+                        <!-- Icono de inicio. -->
+
+                        <span>Inicio</span>
+                        <!-- Texto de la opcion Inicio. -->
+                    </a>
+                    <!-- Cierra el enlace de inicio. -->
+
+                    <a href="#mi-practica">
+                        <!-- Enlace a la opcion consultar practicas. -->
+
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <!-- Icono de busqueda. -->
+
+                        <span>Consultar pr&aacute;ctica</span>
+                        <!-- Texto de la opcion consultar practicas. -->
+                    </a>
+                    <!-- Cierra el enlace de consultar practicas. -->
+
+                    <a href="#mis-actividades">
+                        <!-- Enlace a la opcion registrar actividades realizadas. -->
+
+                        <i class="fa-solid fa-clipboard-list"></i>
+                        <!-- Icono de lista de actividades. -->
+
+                        <span>Mis actividades</span>
+                        <!-- Texto de la opcion registrar actividades. -->
+                    </a>
+                    <!-- Cierra el enlace de registrar actividades. -->
+
+                    <a href="#evidencias">
+                        <!-- Enlace a la opcion cargar evidencias. -->
+
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <!-- Icono de carga de archivos. -->
+
+                        <span>Evidencias</span>
+                        <!-- Texto de la opcion cargar evidencias. -->
+                    </a>
+                    <!-- Cierra el enlace de cargar evidencias. -->
+
+                    <a href="#retroalimentaciones">
+                        <!-- Enlace a la opcion consultar retroalimentacion del docente. -->
+
+                        <i class="fa-solid fa-comments"></i>
+                        <!-- Icono de comentarios. -->
+
+                        <span>Retroalimentaciones</span>
+                        <!-- Texto de la opcion de retroalimentacion. -->
+                    </a>
+                    <!-- Cierra el enlace de retroalimentacion. -->
+
+                    <a href="#informacion-proceso">
+                        <!-- Enlace a la informacion relacionada con el proceso. -->
+
+                        <i class="fa-solid fa-circle-info"></i>
+                        <!-- Icono de informacion. -->
+
+                        <span>Ver informaci&oacute;n de proceso</span>
+                        <!-- Texto de la opcion informacion del proceso. -->
+                    </a>
+                    <!-- Cierra el enlace de informacion del proceso. -->
+
+                    <a href="#evaluaciones">
+                        <!-- Enlace a la opcion evaluaciones. -->
+
+                        <i class="fa-solid fa-square-check"></i>
+                        <!-- Icono de evaluaciones. -->
+
+                        <span>Evaluaciones</span>
+                        <!-- Texto de la opcion evaluaciones. -->
+                    </a>
+                    <!-- Cierra el enlace de evaluaciones. -->
+
+                    <a href="#mi-perfil">
+                        <!-- Enlace a la opcion mi perfil. -->
+
+                        <i class="fa-solid fa-circle-user"></i>
+                        <!-- Icono de perfil. -->
+
+                        <span>Mi perfil</span>
+                        <!-- Texto de la opcion mi perfil. -->
+                    </a>
+                    <!-- Cierra el enlace de mi perfil. -->
+
+                </nav>
+                <!-- Cierra la navegacion del menu lateral. -->
+            </details>
+            <!-- Cierra el menu desplegable. -->
+        </aside>
+        <!-- Cierra el menu lateral. -->
+
+        <section class="contenido-estudiante" id="inicio">
+            <!-- Area principal donde se muestra la informacion del estudiante. -->
+
+            <header class="barra-superior-estudiante">
+                <!-- Barra superior con notificaciones, perfil y salida del sistema. -->
+
+                <button class="boton-notificaciones" type="button" aria-label="Notificaciones">
+                    <!-- Boton visual para revisar notificaciones. -->
+
+                    <i class="fa-regular fa-bell"></i>
+                    <!-- Icono de campana para las notificaciones. -->
+
+                    <span class="contador-notificaciones">3</span>
+                    <!-- Numero de notificaciones pendientes. -->
+                </button>
+                <!-- Cierra el boton de notificaciones. -->
+
+                <details class="perfil-estudiante">
+                    <!-- Menu desplegable con la informacion del perfil del estudiante. -->
+
+                    <summary>
+                        <!-- Encabezado que abre y cierra las opciones del perfil. -->
+
+                        <i class="fa-solid fa-circle-user"></i>
+                        <!-- Icono que representa el perfil del estudiante. -->
+
+                        <span>Perfil del estudiante</span>
+                        <!-- Texto del perfil del estudiante. -->
+
+                        <i class="fa-solid fa-chevron-down"></i>
+                        <!-- Icono que indica que el perfil se despliega hacia abajo. -->
+                    </summary>
+                    <!-- Cierra el encabezado desplegable del perfil. -->
+
+                    <div class="menu-perfil-estudiante">
+                        <!-- Contenedor de las opciones que se despliegan debajo del perfil. -->
+
+                        <a href="index.html" class="cerrar-sesion">
+                        <!-- Enlace para volver al login principal. -->
+
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                            <!-- Icono de cierre de sesion. -->
+
+                            <span>Log out</span>
+                            <!-- Texto del enlace para cerrar sesion. -->
+                        </a>
+                        <!-- Cierra el enlace de cierre de sesion. -->
+                    </div>
+                    <!-- Cierra el menu desplegable del perfil. -->
+                </details>
+                <!-- Cierra el contenedor del perfil. -->
+            </header>
+            <!-- Cierra la barra superior del estudiante. -->
+
+            <div class="mensaje-inicio">
+                <!-- Mensaje inicial cuando no se ha seleccionado una opcion del menu. -->
+
+                <p>Seleccione alguna opci&oacute;n</p>
+                <!-- Texto central de la pantalla de inicio. -->
+            </div>
+            <!-- Cierra el mensaje inicial. -->
+
+            <section class="consulta-practica" id="mi-practica">
+                <!-- Seccion principal para consultar la practica asignada al estudiante. -->
+
+                <article class="bloque-consulta bloque-practica">
+                    <!-- Tarjeta con la informacion general de la practica. -->
+
+                    <div class="titulo-bloque">
+                        <div>
+                            <p>Mi pr&aacute;ctica</p>
+                            <h3>Informaci&oacute;n de mi pr&aacute;ctica</h3>
+                        </div>
+
+                        <span class="etiqueta-estado estado-curso">En curso</span>
+                    </div>
+
+                    <div class="resumen-practica">
+                        <h4>Pr&aacute;ctica III - Profundizaci&oacute;n</h4>
+                        <p>Instituci&oacute;n Educativa La Esperanza</p>
+                    </div>
+
+                    <div class="datos-practica">
+                        <div>
+                            <span>Docente asesor</span>
+                            <strong>Juan Carlos P&eacute;rez</strong>
+                        </div>
+
+                        <div>
+                            <span>Periodo acad&eacute;mico</span>
+                            <strong>2026-I</strong>
+                        </div>
+
+                        <div>
+                            <span>Fecha de inicio</span>
+                            <strong>18/05/2026</strong>
+                        </div>
+
+                        <div>
+                            <span>Fecha de finalizaci&oacute;n</span>
+                            <strong>20/06/2026</strong>
+                        </div>
+
+                        <div>
+                            <span>Horas reglamentarias</span>
+                            <strong>120 horas</strong>
+                        </div>
+
+                        <div>
+                            <span>Horas realizadas</span>
+                            <strong>72 horas</strong>
+                        </div>
+                    </div>
+                </article>
+
+            </section>
+            <!-- Cierra la consulta de practica del estudiante. -->
+
+            <section class="actividades-estudiante" id="mis-actividades">
+                <!-- Seccion independiente para consultar actividades ingresadas por el estudiante. -->
+
+                <article class="bloque-consulta bloque-actividades">
+                    <!-- Tarjeta principal de actividades. -->
+
+                    <div class="titulo-bloque">
+                        <!-- Encabezado de la seccion de actividades. -->
+
+                        <div>
+                            <p>Actividades asignadas</p>
+                            <h3>Mis actividades</h3>
+                        </div>
+                    </div>
+
+                    <div class="tabla-actividades">
+                        <!-- Tabla de actividades asociadas a diferentes profesores. -->
+
+                        <div class="fila-actividad encabezado-actividad">
+                            <span>#</span>
+                            <span>Actividad</span>
+                            <span>Profesor</span>
+                            <span>Tipo</span>
+                            <span>Fecha limite</span>
+                            <span>Hora</span>
+                            <span>Estado</span>
+                        </div>
+
+                        <details class="fila-actividad detalle-actividad" data-actividad="planeacion">
+                            <summary>
+                                <span>1</span>
+                                <span>Planeaci&oacute;n de clase</span>
+                                <span>Juan Carlos P&eacute;rez</span>
+                                <span>Planeaci&oacute;n</span>
+                                <span>25/05/2026</span>
+                                <span>10:30 a. m.</span>
+                                <span><strong class="etiqueta-estado estado-revision estado-entrega">Pendiente</strong></span>
+                            </summary>
+
+                            <div class="contenido-actividad">
+                                <div class="descripcion-docente">
+                                    <h4>Descripci&oacute;n</h4>
+                                    <p>El docente solicita cargar la planeaci&oacute;n de la clase de Matem&aacute;ticas para grado 8&deg;, con objetivos, recursos, metodologia y evaluaci&oacute;n.</p>
+                                </div>
+
+                                <div class="descripcion-docente">
+                                    <h4>Tareas principales</h4>
+                                    <ul>
+                                        <li>Redactar los objetivos de aprendizaje.</li>
+                                        <li>Definir recursos did&aacute;cticos.</li>
+                                        <li>Agregar criterios de evaluaci&oacute;n.</li>
+                                    </ul>
+                                </div>
+
+                                <form class="entrega-actividad">
+                                    <div class="selector-entrega">
+                                        <button class="opcion-entrega" type="button" data-tipo-entrega="drive"><i class="fa-brands fa-google-drive"></i><span>Google Drive</span></button>
+                                        <button class="opcion-entrega" type="button" data-tipo-entrega="vinculo"><i class="fa-solid fa-link"></i><span>V&iacute;nculo</span></button>
+                                        <button class="opcion-entrega" type="button" data-tipo-entrega="archivo"><i class="fa-solid fa-paperclip"></i><span>Archivo</span></button>
+                                    </div>
+                                    <input class="entrada-archivo-actividad" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip">
+                                    <label class="campo-enlace-actividad">Enlace de entrega<input type="url" placeholder="https://..."></label>
+                                    <div class="resumen-entrega" aria-live="polite">Selecciona Google Drive, un v&iacute;nculo o un archivo.</div>
+                                    <div class="acciones-entrega"><button class="boton-enviar-actividad" type="submit"><i class="fa-solid fa-check"></i><span>Actividad enviada</span></button></div>
+                                </form>
+                            </div>
+                        </details>
+
+                        <details class="fila-actividad detalle-actividad" data-actividad="material">
+                            <summary>
+                                <span>2</span>
+                                <span>Material did&aacute;ctico</span>
+                                <span>Mar&iacute;a Fernanda Ruiz</span>
+                                <span>Recurso</span>
+                                <span>28/05/2026</span>
+                                <span>02:15 p. m.</span>
+                                <span><strong class="etiqueta-estado estado-revision">En revisi&oacute;n</strong></span>
+                            </summary>
+
+                            <div class="contenido-actividad">
+                                <div class="descripcion-docente">
+                                    <h4>Descripci&oacute;n</h4>
+                                    <p>Preparar y adjuntar el material utilizado para explicar fracciones, incluyendo guias, diapositivas o recursos visuales.</p>
+                                </div>
+
+                                <div class="descripcion-docente">
+                                    <h4>Tareas principales</h4>
+                                    <ul>
+                                        <li>Organizar el material por momentos de la clase.</li>
+                                        <li>Subir el archivo final en formato editable o PDF.</li>
+                                        <li>Verificar que el material tenga nombre de actividad.</li>
+                                    </ul>
+                                </div>
+
+                                <form class="entrega-actividad">
+                                    <div class="selector-entrega">
+                                        <button class="opcion-entrega" type="button" data-tipo-entrega="drive"><i class="fa-brands fa-google-drive"></i><span>Google Drive</span></button>
+                                        <button class="opcion-entrega" type="button" data-tipo-entrega="vinculo"><i class="fa-solid fa-link"></i><span>V&iacute;nculo</span></button>
+                                        <button class="opcion-entrega" type="button" data-tipo-entrega="archivo"><i class="fa-solid fa-paperclip"></i><span>Archivo</span></button>
+                                    </div>
+                                    <input class="entrada-archivo-actividad" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip">
+                                    <label class="campo-enlace-actividad">Enlace de entrega<input type="url" placeholder="https://..."></label>
+                                    <div class="resumen-entrega" aria-live="polite">Selecciona Google Drive, un v&iacute;nculo o un archivo.</div>
+                                    <div class="acciones-entrega"><button class="boton-enviar-actividad" type="submit"><i class="fa-solid fa-check"></i><span>Actividad enviada</span></button></div>
+                                </form>
+                            </div>
+                        </details>
+
+                        <details class="fila-actividad detalle-actividad" data-actividad="diario">
+                            <summary>
+                                <span>3</span>
+                                <span>Diario pedag&oacute;gico</span>
+                                <span>Andr&eacute;s Molina</span>
+                                <span>Reflexi&oacute;n</span>
+                                <span>01/06/2026</span>
+                                <span>09:45 a. m.</span>
+                                <span><strong class="etiqueta-estado estado-rechazada">Requiere ajuste</strong></span>
+                            </summary>
+
+                            <div class="contenido-actividad">
+                                <div class="descripcion-docente">
+                                    <h4>Descripci&oacute;n</h4>
+                                    <p>Registrar una reflexi&oacute;n sobre la jornada de pr&aacute;ctica, los aprendizajes logrados y las situaciones que requieren seguimiento.</p>
+                                </div>
+
+                                <div class="descripcion-docente">
+                                    <h4>Tareas principales</h4>
+                                    <ul>
+                                        <li>Describir el contexto de la jornada.</li>
+                                        <li>Relacionar la reflexi&oacute;n con el proceso formativo.</li>
+                                        <li>Corregir la evidencia seg&uacute;n observaciones del docente.</li>
+                                    </ul>
+                                </div>
+
+                                <form class="entrega-actividad">
+                                    <div class="selector-entrega">
+                                        <button class="opcion-entrega" type="button" data-tipo-entrega="drive"><i class="fa-brands fa-google-drive"></i><span>Google Drive</span></button>
+                                        <button class="opcion-entrega" type="button" data-tipo-entrega="vinculo"><i class="fa-solid fa-link"></i><span>V&iacute;nculo</span></button>
+                                        <button class="opcion-entrega" type="button" data-tipo-entrega="archivo"><i class="fa-solid fa-paperclip"></i><span>Archivo</span></button>
+                                    </div>
+                                    <input class="entrada-archivo-actividad" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip">
+                                    <label class="campo-enlace-actividad">Enlace de entrega<input type="url" placeholder="https://..."></label>
+                                    <div class="resumen-entrega" aria-live="polite">Selecciona Google Drive, un v&iacute;nculo o un archivo.</div>
+                                    <div class="acciones-entrega"><button class="boton-enviar-actividad" type="submit"><i class="fa-solid fa-check"></i><span>Actividad enviada</span></button></div>
+                                </form>
+                            </div>
+                        </details>
+                    </div>
+                </article>
+            </section>
+            <!-- Cierra la seccion independiente de actividades. -->
+
+            <section class="evidencias-estudiante" id="evidencias">
+                <!-- Seccion independiente para consultar las evidencias cargadas. -->
+
+                <article class="bloque-consulta bloque-evidencias">
+                    <!-- Tarjeta principal de evidencias. -->
+
+                    <div class="pestanas-evidencias">
+                        <!-- Opciones visuales para organizar las evidencias. -->
+
+                        <a href="#evidencias" class="pestana-activa">Evidencias cargadas</a>
+                        <!-- Pestana activa con la tabla general. -->
+
+                        <a href="#evidencias">Evidencias por actividad</a>
+                        <!-- Pestana visual para una futura organizacion por actividad. -->
+                    </div>
+                    <!-- Cierra las pestanas de evidencias. -->
+
+                    <div class="tabla-actividades tabla-evidencias-entrega">
+                        <div class="fila-actividad encabezado-actividad encabezado-evidencia">
+                            <span>#</span>
+                            <span>Evidencia</span>
+                            <span>Actividad</span>
+                            <span>Fecha limite</span>
+                            <span>Hora</span>
+                            <span>Estado</span>
+                        </div>
+
+                        <details class="fila-actividad detalle-evidencia" data-evidencia="planeacion-evidencia">
+                            <summary>
+                                <span>1</span>
+                                <span>Planeaci&oacute;n de clase</span>
+                                <span>Matem&aacute;ticas - Grado 8&deg;</span>
+                                <span>25/05/2026</span>
+                                <span>10:30 a. m.</span>
+                                <span><strong class="etiqueta-estado estado-revision estado-entrega">Pendiente</strong></span>
+                            </summary>
+                            <div class="contenido-actividad">
+                                <div class="descripcion-docente"><h4>Descripci&oacute;n</h4><p>Adjunta la planeaci&oacute;n completa con objetivos, recursos, metodologia y evaluaci&oacute;n.</p></div>
+                                <div class="descripcion-docente"><h4>Formato esperado</h4><ul><li>PDF, Word o enlace de Drive.</li><li>Debe subirse antes de la fecha limite.</li><li>El archivo debe tener nombre claro.</li></ul></div>
+                                <form class="entrega-actividad">
+                                    <div class="selector-entrega"><button class="opcion-entrega" type="button" data-tipo-entrega="drive"><i class="fa-brands fa-google-drive"></i><span>Google Drive</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="vinculo"><i class="fa-solid fa-link"></i><span>V&iacute;nculo</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="archivo"><i class="fa-solid fa-paperclip"></i><span>Archivo</span></button></div>
+                                    <input class="entrada-archivo-actividad" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip">
+                                    <label class="campo-enlace-actividad">Enlace de evidencia<input type="url" placeholder="https://..."></label>
+                                    <div class="resumen-entrega" aria-live="polite">Selecciona Google Drive, un v&iacute;nculo o un archivo.</div>
+                                    <div class="acciones-entrega"><button class="boton-enviar-actividad" type="submit"><i class="fa-solid fa-check"></i><span>Evidencia enviada</span></button></div>
+                                </form>
+                            </div>
+                        </details>
+
+                        <details class="fila-actividad detalle-evidencia" data-evidencia="material-evidencia">
+                            <summary>
+                                <span>2</span>
+                                <span>Material did&aacute;ctico</span>
+                                <span>Fracciones</span>
+                                <span>28/05/2026</span>
+                                <span>02:15 p. m.</span>
+                                <span><strong class="etiqueta-estado estado-revision estado-entrega">Pendiente</strong></span>
+                            </summary>
+                            <div class="contenido-actividad">
+                                <div class="descripcion-docente"><h4>Descripci&oacute;n</h4><p>Sube el material que usaste para explicar fracciones, incluyendo guias, diapositivas o recursos visuales.</p></div>
+                                <div class="descripcion-docente"><h4>Formato esperado</h4><ul><li>PowerPoint, PDF, imagen, video o enlace.</li><li>Incluye todos los recursos usados en clase.</li><li>Verifica que el archivo abra correctamente.</li></ul></div>
+                                <form class="entrega-actividad">
+                                    <div class="selector-entrega"><button class="opcion-entrega" type="button" data-tipo-entrega="drive"><i class="fa-brands fa-google-drive"></i><span>Google Drive</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="vinculo"><i class="fa-solid fa-link"></i><span>V&iacute;nculo</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="archivo"><i class="fa-solid fa-paperclip"></i><span>Archivo</span></button></div>
+                                    <input class="entrada-archivo-actividad" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip">
+                                    <label class="campo-enlace-actividad">Enlace de evidencia<input type="url" placeholder="https://..."></label>
+                                    <div class="resumen-entrega" aria-live="polite">Selecciona Google Drive, un v&iacute;nculo o un archivo.</div>
+                                    <div class="acciones-entrega"><button class="boton-enviar-actividad" type="submit"><i class="fa-solid fa-check"></i><span>Evidencia enviada</span></button></div>
+                                </form>
+                            </div>
+                        </details>
+
+                        <details class="fila-actividad detalle-evidencia" data-evidencia="foto-evidencia">
+                            <summary>
+                                <span>3</span>
+                                <span>Evidencia fotogr&aacute;fica</span>
+                                <span>Actividad en aula</span>
+                                <span>30/05/2026</span>
+                                <span>11:05 a. m.</span>
+                                <span><strong class="etiqueta-estado estado-revision estado-entrega">Pendiente</strong></span>
+                            </summary>
+                            <div class="contenido-actividad">
+                                <div class="descripcion-docente"><h4>Descripci&oacute;n</h4><p>Adjunta fotografias o video corto que evidencie la actividad realizada en el aula.</p></div>
+                                <div class="descripcion-docente"><h4>Formato esperado</h4><ul><li>Imagen, video, ZIP o enlace.</li><li>Evita archivos borrosos o incompletos.</li><li>Organiza las fotos por actividad.</li></ul></div>
+                                <form class="entrega-actividad">
+                                    <div class="selector-entrega"><button class="opcion-entrega" type="button" data-tipo-entrega="drive"><i class="fa-brands fa-google-drive"></i><span>Google Drive</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="vinculo"><i class="fa-solid fa-link"></i><span>V&iacute;nculo</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="archivo"><i class="fa-solid fa-paperclip"></i><span>Archivo</span></button></div>
+                                    <input class="entrada-archivo-actividad" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip">
+                                    <label class="campo-enlace-actividad">Enlace de evidencia<input type="url" placeholder="https://..."></label>
+                                    <div class="resumen-entrega" aria-live="polite">Selecciona Google Drive, un v&iacute;nculo o un archivo.</div>
+                                    <div class="acciones-entrega"><button class="boton-enviar-actividad" type="submit"><i class="fa-solid fa-check"></i><span>Evidencia enviada</span></button></div>
+                                </form>
+                            </div>
+                        </details>
+
+                        <details class="fila-actividad detalle-evidencia" data-evidencia="diario-evidencia">
+                            <summary>
+                                <span>4</span>
+                                <span>Diario pedag&oacute;gico</span>
+                                <span>Reflexi&oacute;n de pr&aacute;ctica</span>
+                                <span>01/06/2026</span>
+                                <span>09:45 a. m.</span>
+                                <span><strong class="etiqueta-estado estado-rechazada estado-entrega">Requiere ajuste</strong></span>
+                            </summary>
+                            <div class="contenido-actividad">
+                                <div class="descripcion-docente"><h4>Descripci&oacute;n</h4><p>Sube la versi&oacute;n corregida del diario pedag&oacute;gico con los ajustes solicitados en la retroalimentaci&oacute;n.</p></div>
+                                <div class="descripcion-docente"><h4>Formato esperado</h4><ul><li>Word, PDF o enlace editable.</li><li>Incluye la reflexi&oacute;n corregida.</li><li>Entrega antes de la hora limite.</li></ul></div>
+                                <form class="entrega-actividad">
+                                    <div class="selector-entrega"><button class="opcion-entrega" type="button" data-tipo-entrega="drive"><i class="fa-brands fa-google-drive"></i><span>Google Drive</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="vinculo"><i class="fa-solid fa-link"></i><span>V&iacute;nculo</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="archivo"><i class="fa-solid fa-paperclip"></i><span>Archivo</span></button></div>
+                                    <input class="entrada-archivo-actividad" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip">
+                                    <label class="campo-enlace-actividad">Enlace de evidencia<input type="url" placeholder="https://..."></label>
+                                    <div class="resumen-entrega" aria-live="polite">Selecciona Google Drive, un v&iacute;nculo o un archivo.</div>
+                                    <div class="acciones-entrega"><button class="boton-enviar-actividad" type="submit"><i class="fa-solid fa-check"></i><span>Evidencia enviada</span></button></div>
+                                </form>
+                            </div>
+                        </details>
+                    </div>
+                </article>
+                <!-- Cierra la tarjeta principal de evidencias. -->
+            </section>
+            <!-- Cierra la seccion independiente de evidencias. -->
+
+            <section class="retroalimentaciones-estudiante" id="retroalimentaciones">
+                <!-- Seccion independiente para consultar comentarios del profesor. -->
+
+                <article class="bloque-consulta bloque-retroalimentaciones">
+                    <!-- Tarjeta principal de retroalimentaciones. -->
+
+                    <div class="titulo-bloque">
+                        <!-- Encabezado de la seccion. -->
+
+                        <div>
+                            <p>Comentarios del profesor</p>
+                            <h3>Retroalimentaciones</h3>
+                        </div>
+                    </div>
+
+                    <div class="lista-retroalimentaciones">
+                        <!-- Lista de comentarios realizados por los profesores. -->
+
+                        <article class="tarjeta-retroalimentacion">
+                            <div class="encabezado-retroalimentacion">
+                                <div>
+                                    <h4>Planeaci&oacute;n de clase</h4>
+                                    <p>Profesor: Juan Carlos P&eacute;rez</p>
+                                </div>
+
+                                <span class="nota-retroalimentacion">Nota: 4.5</span>
+                            </div>
+
+                            <div class="comentarios-retroalimentacion">
+                                <div>
+                                    <span>Qu&eacute; hizo bien</span>
+                                    <p>La actividad tiene objetivos claros y una buena secuencia para iniciar, desarrollar y cerrar la clase.</p>
+                                </div>
+
+                                <div>
+                                    <span>Qu&eacute; debe corregir</span>
+                                    <p>Debe completar los criterios de evaluaci&oacute;n y relacionarlos mejor con los logros esperados.</p>
+                                </div>
+
+                                <div>
+                                    <span>C&oacute;mo puede mejorar</span>
+                                    <p>Agregue una r&uacute;brica corta y explique c&oacute;mo se valorar&aacute; la participaci&oacute;n de los estudiantes.</p>
+                                </div>
+                            </div>
+                        </article>
+
+                        <article class="tarjeta-retroalimentacion">
+                            <div class="encabezado-retroalimentacion">
+                                <div>
+                                    <h4>Material did&aacute;ctico</h4>
+                                    <p>Profesor: Mar&iacute;a Fernanda Ruiz</p>
+                                </div>
+
+                                <span class="estado-retroalimentacion">Sin calificar</span>
+                            </div>
+
+                            <div class="comentarios-retroalimentacion">
+                                <div>
+                                    <span>Qu&eacute; hizo bien</span>
+                                    <p>El material es visual, ordenado y ayuda a explicar el tema de fracciones de manera sencilla.</p>
+                                </div>
+
+                                <div>
+                                    <span>Qu&eacute; debe corregir</span>
+                                    <p>Faltan instrucciones para que el estudiante sepa c&oacute;mo usar cada recurso durante la actividad.</p>
+                                </div>
+
+                                <div>
+                                    <span>C&oacute;mo puede mejorar</span>
+                                    <p>Incluya ejemplos resueltos y una actividad corta para comprobar la comprensi&oacute;n del tema.</p>
+                                </div>
+                            </div>
+                        </article>
+
+                        <article class="tarjeta-retroalimentacion">
+                            <div class="encabezado-retroalimentacion">
+                                <div>
+                                    <h4>Diario pedag&oacute;gico</h4>
+                                    <p>Profesor: Andr&eacute;s Molina</p>
+                                </div>
+
+                                <span class="nota-retroalimentacion nota-pendiente">Nota pendiente</span>
+                            </div>
+
+                            <div class="comentarios-retroalimentacion">
+                                <div>
+                                    <span>Qu&eacute; hizo bien</span>
+                                    <p>Describe situaciones reales de la jornada y reconoce aprendizajes importantes del proceso.</p>
+                                </div>
+
+                                <div>
+                                    <span>Qu&eacute; debe corregir</span>
+                                    <p>La reflexi&oacute;n necesita mayor profundidad y relaci&oacute;n con el rol docente en el aula.</p>
+                                </div>
+
+                                <div>
+                                    <span>C&oacute;mo puede mejorar</span>
+                                    <p>Explique qu&eacute; har&iacute;a diferente en una pr&oacute;xima clase y conecte la experiencia con fundamentos pedag&oacute;gicos.</p>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                </article>
+            </section>
+            <!-- Cierra la seccion independiente de retroalimentaciones. -->
+
+            <section class="evaluaciones-estudiante" id="evaluaciones">
+                <!-- Seccion independiente para consultar evaluaciones presentadas o pendientes. -->
+
+                <article class="bloque-consulta bloque-evaluaciones">
+                    <!-- Tarjeta principal de evaluaciones. -->
+
+                    <div class="titulo-bloque">
+                        <div>
+                            <p>Evaluaciones academicas</p>
+                            <h3>Evaluaciones</h3>
+                        </div>
+                    </div>
+
+                    <div class="tabla-actividades tabla-evaluaciones-entrega">
+                        <div class="fila-actividad encabezado-actividad encabezado-evaluacion">
+                            <span>#</span>
+                            <span>Evaluaci&oacute;n</span>
+                            <span>Asignatura</span>
+                            <span>Fecha limite</span>
+                            <span>Estado</span>
+                            <span>Calificaci&oacute;n</span>
+                        </div>
+
+                        <details class="fila-actividad detalle-evaluacion" data-evaluacion="parcial-1">
+                            <summary>
+                                <span>1</span>
+                                <span>Parcial 1</span>
+                                <span>Base de Datos II</span>
+                                <span>10/09/2026</span>
+                                <span><strong class="etiqueta-estado estado-aprobada estado-entrega">Presentada</strong></span>
+                                <span>4.2</span>
+                            </summary>
+                            <div class="contenido-actividad">
+                                <div class="descripcion-docente"><h4>Descripci&oacute;n</h4><p>Entrega los soportes del parcial 1 y el desarrollo solicitado por el docente.</p></div>
+                                <div class="descripcion-docente"><h4>Formato esperado</h4><ul><li>PDF, Word, imagen, video o enlace.</li><li>Incluye el desarrollo completo.</li><li>Verifica que el archivo sea legible.</li></ul></div>
+                                <form class="entrega-actividad">
+                                    <div class="selector-entrega"><button class="opcion-entrega" type="button" data-tipo-entrega="drive"><i class="fa-brands fa-google-drive"></i><span>Google Drive</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="vinculo"><i class="fa-solid fa-link"></i><span>V&iacute;nculo</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="archivo"><i class="fa-solid fa-paperclip"></i><span>Archivo</span></button></div>
+                                    <input class="entrada-archivo-actividad" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip">
+                                    <label class="campo-enlace-actividad">Enlace de evaluaci&oacute;n<input type="url" placeholder="https://..."></label>
+                                    <div class="resumen-entrega" aria-live="polite">Selecciona Google Drive, un v&iacute;nculo o un archivo.</div>
+                                    <div class="acciones-entrega"><button class="boton-enviar-actividad" type="submit"><i class="fa-solid fa-check"></i><span>Evaluaci&oacute;n enviada</span></button></div>
+                                </form>
+                            </div>
+                        </details>
+
+                        <details class="fila-actividad detalle-evaluacion" data-evaluacion="parcial-2">
+                            <summary>
+                                <span>2</span>
+                                <span>Parcial 2</span>
+                                <span>Base de Datos II</span>
+                                <span>20/10/2026</span>
+                                <span><strong class="etiqueta-estado estado-revision estado-entrega">Pendiente</strong></span>
+                                <span>-</span>
+                            </summary>
+                            <div class="contenido-actividad">
+                                <div class="descripcion-docente"><h4>Descripci&oacute;n</h4><p>Sube la respuesta o soporte correspondiente al parcial 2 antes de la fecha limite.</p></div>
+                                <div class="descripcion-docente"><h4>Formato esperado</h4><ul><li>Archivo en PDF, Word, imagen, video o enlace.</li><li>Debe estar identificado con tu nombre.</li><li>No dejes campos incompletos.</li></ul></div>
+                                <form class="entrega-actividad">
+                                    <div class="selector-entrega"><button class="opcion-entrega" type="button" data-tipo-entrega="drive"><i class="fa-brands fa-google-drive"></i><span>Google Drive</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="vinculo"><i class="fa-solid fa-link"></i><span>V&iacute;nculo</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="archivo"><i class="fa-solid fa-paperclip"></i><span>Archivo</span></button></div>
+                                    <input class="entrada-archivo-actividad" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip">
+                                    <label class="campo-enlace-actividad">Enlace de evaluaci&oacute;n<input type="url" placeholder="https://..."></label>
+                                    <div class="resumen-entrega" aria-live="polite">Selecciona Google Drive, un v&iacute;nculo o un archivo.</div>
+                                    <div class="acciones-entrega"><button class="boton-enviar-actividad" type="submit"><i class="fa-solid fa-check"></i><span>Evaluaci&oacute;n enviada</span></button></div>
+                                </form>
+                            </div>
+                        </details>
+
+                        <details class="fila-actividad detalle-evaluacion" data-evaluacion="examen-final">
+                            <summary>
+                                <span>3</span>
+                                <span>Examen final</span>
+                                <span>Base de Datos II</span>
+                                <span>25/11/2026</span>
+                                <span><strong class="etiqueta-estado estado-revision estado-entrega">Pendiente</strong></span>
+                                <span>-</span>
+                            </summary>
+                            <div class="contenido-actividad">
+                                <div class="descripcion-docente"><h4>Descripci&oacute;n</h4><p>Entrega el examen final o el soporte indicado por el docente para cerrar el proceso academico.</p></div>
+                                <div class="descripcion-docente"><h4>Formato esperado</h4><ul><li>PDF, Word, imagen, video, ZIP o enlace.</li><li>Revisa que el documento este completo.</li><li>Entrega antes de la fecha limite.</li></ul></div>
+                                <form class="entrega-actividad">
+                                    <div class="selector-entrega"><button class="opcion-entrega" type="button" data-tipo-entrega="drive"><i class="fa-brands fa-google-drive"></i><span>Google Drive</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="vinculo"><i class="fa-solid fa-link"></i><span>V&iacute;nculo</span></button><button class="opcion-entrega" type="button" data-tipo-entrega="archivo"><i class="fa-solid fa-paperclip"></i><span>Archivo</span></button></div>
+                                    <input class="entrada-archivo-actividad" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip">
+                                    <label class="campo-enlace-actividad">Enlace de evaluaci&oacute;n<input type="url" placeholder="https://..."></label>
+                                    <div class="resumen-entrega" aria-live="polite">Selecciona Google Drive, un v&iacute;nculo o un archivo.</div>
+                                    <div class="acciones-entrega"><button class="boton-enviar-actividad" type="submit"><i class="fa-solid fa-check"></i><span>Evaluaci&oacute;n enviada</span></button></div>
+                                </form>
+                            </div>
+                        </details>
+                    </div>
+                </article>
+            </section>
+            <!-- Cierra la seccion independiente de evaluaciones. -->
+
+            <section class="informacion-proceso-estudiante" id="informacion-proceso">
+                <!-- Seccion independiente con el resumen del proceso academico del estudiante. -->
+
+                <article class="bloque-consulta bloque-informacion-proceso">
+                    <!-- Tarjeta principal de informacion de proceso. -->
+
+                    <div class="titulo-bloque">
+                        <div>
+                            <p>Resumen academico</p>
+                            <h3>Informaci&oacute;n de proceso</h3>
+                        </div>
+                    </div>
+
+                    <div class="grid-proceso">
+                        <!-- Tarjetas con la informacion principal del proceso. -->
+
+                        <article class="tarjeta-proceso">
+                            <i class="fa-solid fa-book-open"></i>
+                            <h4>Cursos inscritos</h4>
+                            <ul>
+                                <li>Pr&aacute;ctica Pedag&oacute;gica III</li>
+                                <li>Did&aacute;ctica de las Matem&aacute;ticas</li>
+                                <li>Evaluaci&oacute;n Educativa</li>
+                            </ul>
+                        </article>
+
+                        <article class="tarjeta-proceso">
+                            <i class="fa-solid fa-list-check"></i>
+                            <h4>Actividades por realizar</h4>
+                            <ul>
+                                <li>Entregar diario pedag&oacute;gico corregido.</li>
+                                <li>Completar planeaci&oacute;n de clase.</li>
+                                <li>Preparar evaluaci&oacute;n parcial.</li>
+                            </ul>
+                        </article>
+
+                        <article class="tarjeta-proceso">
+                            <i class="fa-solid fa-file-circle-exclamation"></i>
+                            <h4>Evidencias pendientes</h4>
+                            <ul>
+                                <li>Registro fotogr&aacute;fico de actividad en aula.</li>
+                                <li>Formato de asistencia firmado.</li>
+                                <li>Soporte de material did&aacute;ctico.</li>
+                            </ul>
+                        </article>
+
+                        <article class="tarjeta-proceso">
+                            <i class="fa-solid fa-chart-simple"></i>
+                            <h4>Calificaciones de cursos</h4>
+                            <div class="lista-calificaciones">
+                                <span>Pr&aacute;ctica Pedag&oacute;gica III <strong>4.5</strong></span>
+                                <span>Did&aacute;ctica de las Matem&aacute;ticas <strong>4.2</strong></span>
+                                <span>Evaluaci&oacute;n Educativa <strong>Pendiente</strong></span>
+                            </div>
+                        </article>
+                    </div>
+
+                    <div class="panel-fechas-proceso">
+                        <!-- Lista de fechas importantes y evaluaciones proximas. -->
+
+                        <div class="titulo-bloque titulo-fechas">
+                            <div>
+                                <p>Agenda</p>
+                                <h3>Fechas importantes</h3>
+                            </div>
+                        </div>
+
+                        <div class="lista-fechas">
+                            <article>
+                                <span>05/06/2026</span>
+                                <div>
+                                    <h4>Entrega de evidencia corregida</h4>
+                                    <p>Subir nuevamente el diario pedag&oacute;gico con los ajustes solicitados.</p>
+                                </div>
+                            </article>
+
+                            <article>
+                                <span>10/06/2026</span>
+                                <div>
+                                    <h4>Evaluaci&oacute;n parcial</h4>
+                                    <p>Evaluaci&oacute;n relacionada con el avance de la pr&aacute;ctica.</p>
+                                </div>
+                            </article>
+
+                            <article>
+                                <span>20/06/2026</span>
+                                <div>
+                                    <h4>Cierre de periodo de pr&aacute;ctica</h4>
+                                    <p>Fecha final para dejar actividades y evidencias al d&iacute;a.</p>
+                                </div>
+                            </article>
+                        </div>
+                    </div>
+                </article>
+            </section>
+            <!-- Cierra la seccion independiente de informacion de proceso. -->
+
+            <section class="perfil-personal-estudiante" id="mi-perfil">
+                <!-- Seccion independiente con la informacion personal y academica del estudiante. -->
+
+                <article class="bloque-consulta bloque-perfil-personal">
+                    <!-- Tarjeta principal del perfil del estudiante. -->
+
+                    <div class="titulo-bloque">
+                        <div>
+                            <p>Datos del estudiante</p>
+                            <h3>Mi perfil</h3>
+                        </div>
+
+                        <a href="#" class="boton-registrar-actividad" id="guardar-perfil-estudiante">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span>Guardar cambios</span>
+                        </a>
+                    </div>
+
+                    <div class="contenido-perfil">
+                        <!-- Columna para la foto de perfil. -->
+
+                        <aside class="foto-perfil">
+                            <div class="avatar-perfil">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+
+                            <label class="boton-foto-perfil">
+                                <i class="fa-solid fa-camera"></i>
+                                <span>Elegir foto</span>
+                                <input type="file" accept="image/*">
+                            </label>
+                        </aside>
+
+                        <div class="datos-perfil">
+                            <!-- Informacion personal del estudiante. -->
+
+                            <section class="grupo-perfil">
+                                <h4>Informaci&oacute;n personal</h4>
+
+                                <div class="campos-perfil">
+                                    <label>
+                                        <span>Nombre completo</span>
+                                        <input type="text" value="Laura Daniela G&oacute;mez R&iacute;os" readonly>
+                                    </label>
+
+                                    <label>
+                                        <span>Documento</span>
+                                        <input type="text" value="1.023.456.789" readonly>
+                                    </label>
+
+                                    <label>
+                                        <span>Correo institucional</span>
+                                        <input type="email" value="laura.gomez@institucion.edu.co" readonly>
+                                    </label>
+
+                                    <label>
+                                        <span>Correo personal</span>
+                                        <input type="email" value="lauragomez@email.com">
+                                    </label>
+
+                                    <label>
+                                        <span>Tel&eacute;fono</span>
+                                        <input type="tel" value="300 123 4567">
+                                    </label>
+                                </div>
+                            </section>
+
+                            <section class="grupo-perfil">
+                                <h4>Informaci&oacute;n acad&eacute;mica</h4>
+
+                                <div class="campos-perfil">
+                                    <label>
+                                        <span>Semestre</span>
+                                        <input type="text" value="S&eacute;ptimo semestre" readonly>
+                                    </label>
+
+                                    <label>
+                                        <span>Programa acad&eacute;mico</span>
+                                        <input type="text" value="Licenciatura en Educaci&oacute;n B&aacute;sica" readonly>
+                                    </label>
+
+                                    <label>
+                                        <span>Estado</span>
+                                        <input type="text" value="Activo" readonly>
+                                    </label>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                </article>
+            </section>
+            <!-- Cierra la seccion independiente de mi perfil. -->
+        </section>
+        <!-- Cierra el contenido principal del estudiante. -->
+    </main>
+    <!-- Cierra el contenedor principal de la pagina del estudiante. -->
+    <script src="../js/estudiante.js"></script>
+    <script src="../js/interacciones.js"></script>
+</body>
+<!-- Cierra el cuerpo del documento. -->
+
+</html>
+<!-- Cierra el documento HTML. -->

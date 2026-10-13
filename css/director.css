@@ -1,0 +1,45 @@
+.resumenes-director { grid-template-columns:repeat(4,1fr); }
+.indicador { width:10px; height:10px; flex:0 0 10px; border-radius:50%; }.alerta-indicador { background:#ff9b9b; }.aviso-indicador { background:#ffe28a; }.normal-indicador { background:#8ef0b2; }
+.barras-resumen { display:grid; gap:17px; padding:8px 20px 22px; }.barras-resumen > div,.grafica-comparacion > div { display:grid; grid-template-columns:120px minmax(70px,1fr) 32px; gap:10px; align-items:center; }.barras-resumen span,.grafica-comparacion span { color:rgba(240,248,255,.78); font-size:12px; }.barras-resumen i,.grafica-comparacion i,.cumplimiento i { height:8px; overflow:hidden; border-radius:99px; background:rgba(144,221,255,.18); }.barras-resumen b,.grafica-comparacion b,.cumplimiento b { display:block; height:100%; border-radius:99px; background:#7ddcff; }.barras-resumen strong,.grafica-comparacion strong { color:#fff; font-size:12px; text-align:right; }.barra-alerta b { background:#ff9b9b; }
+.cumplimiento { display:flex; align-items:center; gap:8px; }.cumplimiento i { width:90px; }.cumplimiento span { color:#eef9ff; font-size:11px; }.evaluacion-resumen,.informes-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-bottom:20px; }.evaluacion-resumen .bloque-consulta,.informe { display:flex; align-items:center; gap:14px; padding:19px; }.icono-dato,.informe > i { width:42px; height:42px; display:grid; place-items:center; border-radius:6px; color:#7ddcff; background:rgba(125,220,255,.13); font-size:18px; }.evaluacion-resumen strong,.informe strong { display:block; color:#fff; font-size:23px; }.evaluacion-resumen span,.informe span,.informe small { display:block; margin-top:4px; color:rgba(240,248,255,.7); font-size:11px; }.lista-informes > div { display:flex; align-items:center; gap:12px; padding:14px 20px; border-top:1px solid rgba(144,221,255,.14); }.lista-informes > div > i { color:#7ddcff; font-size:20px; }.lista-informes p { flex:1; }.lista-informes strong,.lista-informes small { display:block; }.lista-informes strong { color:#fff; font-size:13px; }.lista-informes small { margin-top:5px; color:rgba(240,248,255,.65); font-size:11px; }
+.filtros-comparacion { display:grid; grid-template-columns:1fr 1fr auto; align-items:end; gap:15px; padding:20px; margin-bottom:20px; }.filtros-comparacion label { display:grid; gap:7px; color:#eef9ff; font-size:12px; font-weight:700; }.filtros-comparacion select { min-height:40px; border:1px solid rgba(144,221,255,.28); border-radius:6px; padding:0 10px; color:#eef9ff; background:rgba(9,26,46,.55); }.filtros-comparacion option { color:#eef9ff; background:#091a2e; }.comparacion-grid { display:grid; grid-template-columns:1.15fr .85fr; gap:20px; }.grafica-comparacion { display:grid; gap:21px; padding:10px 20px 24px; }.hallazgos { display:grid; gap:12px; padding:0 20px 20px; }.hallazgos > div { display:flex; gap:11px; padding:13px; border:1px solid rgba(255,226,138,.25); border-radius:6px; background:rgba(255,226,138,.1); }.hallazgos i { color:#ffe28a; }.hallazgos p { display:grid; gap:5px; }.hallazgos strong { color:#fff; font-size:13px; }.hallazgos span { color:rgba(240,248,255,.72); font-size:12px; line-height:1.4; }
+@media (max-width:980px) { .resumenes-director { grid-template-columns:repeat(2,1fr); } }
+@media (max-width:780px) { .comparacion-grid { grid-template-columns:1fr; }.filtros-comparacion { grid-template-columns:1fr; }.filtros-comparacion .boton-principal { width:100%; }.evaluacion-resumen,.informes-grid { grid-template-columns:1fr; } }
+@media (max-width:520px) { .resumenes-director { grid-template-columns:1fr; }.barras-resumen > div,.grafica-comparacion > div { grid-template-columns:90px minmax(40px,1fr) 28px; gap:7px; } }
+
+@media (max-width:420px) {
+    .evaluacion-resumen .bloque-consulta,
+    .informe {
+        align-items:flex-start;
+        flex-direction:column;
+    }
+
+    .lista-informes > div {
+        align-items:flex-start;
+        flex-direction:column;
+    }
+
+    .lista-informes .enlace-accion {
+        white-space:normal;
+    }
+
+    .cumplimiento {
+        align-items:flex-start;
+        flex-direction:column;
+    }
+
+    .cumplimiento i {
+        width:100%;
+    }
+
+    .barras-resumen > div,
+    .grafica-comparacion > div {
+        grid-template-columns:1fr;
+        gap:6px;
+    }
+
+    .barras-resumen strong,
+    .grafica-comparacion strong {
+        text-align:left;
+    }
+}
