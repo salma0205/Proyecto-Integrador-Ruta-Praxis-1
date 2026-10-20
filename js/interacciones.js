@@ -146,7 +146,7 @@
     }
 
     function esClickConAccionPropia(elemento) {
-        if (elemento.closest('[data-vista], [data-abrir-modal], [data-abrir-actividad], [data-abrir-usuario], [data-abrir-institucion], [data-abrir-practica], .cerrar-modal, .cerrar-modal-usuario, .cerrar-modal-institucion, .cerrar-modal-practica, .cerrar-flotante, summary')) return true;
+        if (elemento.closest('[data-vista], [data-abrir-modal], [data-abrir-actividad], [data-abrir-usuario], [data-abrir-programa], [data-abrir-institucion], [data-abrir-practica], .cerrar-modal, .cerrar-modal-usuario, .cerrar-modal-programa, .cerrar-modal-institucion, .cerrar-modal-practica, .cerrar-flotante, summary')) return true;
         if (elemento.closest('.entrega-item, .contacto, .lista-retro button')) return true;
         if (elemento.closest('.editar-usuario, .cambiar-estado, .guardar-rol, .editar-registro, .editar-tarjeta, .boton-desactivar, .modal-admin')) return true;
         if (elemento.matches('[type="submit"], .enviar-mensaje')) return true;

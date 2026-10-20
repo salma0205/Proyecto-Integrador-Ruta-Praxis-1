@@ -60,15 +60,4 @@ document.getElementById('form-seguimiento').addEventListener('submit', event => 
     mostrarNotificacionAsesor('La observacion de seguimiento fue guardada.');
 });
 
-document.getElementById('form-perfil-asesor').addEventListener('submit', event => {
-    event.preventDefault();
-    const campos = document.querySelectorAll('#form-perfil-asesor input:not([readonly])');
-    estadoAsesor.perfil = Array.from(campos).map(campo => campo.value);
-    guardarEstadoAsesor();
-    mostrarNotificacionAsesor('La informacion de perfil fue actualizada.');
-});
-
 if (estadoAsesor.historial) document.getElementById('historial-seguimiento').innerHTML = estadoAsesor.historial;
-if (estadoAsesor.perfil) {
-    document.querySelectorAll('#form-perfil-asesor input:not([readonly])').forEach((campo, indice) => campo.value = estadoAsesor.perfil[indice] || campo.value);
-}

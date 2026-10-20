@@ -10,6 +10,10 @@
     box-sizing: border-box;
 }
 
+[hidden] {
+    display: none !important;
+}
+
 /* Estilos generales del cuerpo de la pagina. */
 body {
     /* Hace que el body ocupe como minimo toda la altura de la pantalla. */
@@ -298,6 +302,32 @@ body {
     color: #7ddcff;
 }
 
+.roles-login {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.roles-login button {
+    width: 100%;
+    min-height: 36px;
+    height: auto;
+    border: 1px solid rgba(144, 221, 255, 0.28);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: #eef9ff;
+    background: rgba(9, 26, 46, 0.55);
+    box-shadow: none;
+    font-size: 12px;
+}
+
+.roles-login button:hover,
+.roles-login button.activo {
+    color: #071827;
+    background: #7ddcff;
+    transform: none;
+}
+
 /* Estilos del boton principal. */
 button {
     /* Hace que el boton ocupe todo el ancho del formulario. */
@@ -370,6 +400,10 @@ button:hover {
 
         /* Espacio entre los elementos cuando estan en columna. */
         gap: 10px;
+    }
+
+    .roles-login {
+        grid-template-columns: 1fr;
     }
 }
 

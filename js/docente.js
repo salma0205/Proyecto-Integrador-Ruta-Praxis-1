@@ -15,14 +15,38 @@ enlacesVista.forEach(enlace => enlace.addEventListener('click', () => abrirVista
 document.querySelector('.menu-movil').addEventListener('click', () => document.querySelector('.barra-lateral').classList.toggle('abierta'));
 
 const datosEntregas = {
-    mariana: { estudiante: 'Mariana Vega', actividad: 'Diario reflexivo - Semana 4', fecha: 'Entregado hoy, 9:20 a. m.', archivo: 'diario_reflexivo_semana_4.pdf', texto: 'Durante esta semana pude identificar que las preguntas abiertas favorecen la participacion del grupo. Adjunto mis reflexiones sobre la actividad de lectura guiada.' },
-    daniela: { estudiante: 'Daniela Lopez', actividad: 'Planeacion de clase', fecha: 'Entregado hoy, 8:40 a. m.', archivo: 'planeacion_lectura_critica.pdf', texto: 'Comparto la planeacion para la sesion de lectura critica. Incluyo una actividad de inicio para recuperar los saberes previos del grupo.' },
-    jose: { estudiante: 'Jose Rojas', actividad: 'Evidencia fotografica', fecha: 'Entregado ayer, 5:16 p. m.', archivo: 'evidencia_intervencion_aula.zip', texto: 'Adjunto las fotografias y una descripcion breve de la actividad de lectura realizada con el curso 8-B.' },
-    andrea: { estudiante: 'Andrea Silva', actividad: 'Diario reflexivo - Semana 4', fecha: 'Entregado ayer, 3:30 p. m.', archivo: 'diario_reflexivo_andrea.pdf', texto: 'Este registro recoge las situaciones de aula que considero importantes para ajustar mi proxima intervencion.' }
+    mariana: {
+        estudiante: 'Mariana Vega',
+        actividad: 'Diario reflexivo - Semana 4',
+        fecha: 'Entregado hoy, 9:20 a. m.',
+        archivo: 'diario_reflexivo_semana_4.pdf',
+        texto: 'Durante esta semana pude identificar que las preguntas abiertas favorecen la participacion del grupo. Adjunto mis reflexiones sobre la actividad de lectura guiada.'
+    },
+    daniela: {
+        estudiante: 'Daniela Lopez',
+        actividad: 'Planeacion de clase',
+        fecha: 'Entregado hoy, 8:40 a. m.',
+        archivo: 'planeacion_clase_daniela.pdf',
+        texto: 'Comparto la planeacion de clase con objetivos, recursos, momentos de desarrollo y criterios de evaluacion para el grupo asignado.'
+    },
+    jose: {
+        estudiante: 'Jose Rojas',
+        actividad: 'Evidencia fotografica',
+        fecha: 'Entregado ayer, 4:15 p. m.',
+        archivo: 'evidencia_fotografica_jose.zip',
+        texto: 'Adjunto el registro fotografico de la actividad desarrollada en aula junto con una breve descripcion de los resultados observados.'
+    },
+    andrea: {
+        estudiante: 'Andrea Silva',
+        actividad: 'Diario reflexivo - Semana 4',
+        fecha: 'Entregado ayer, 2:30 p. m.',
+        archivo: 'diario_reflexivo_andrea.pdf',
+        texto: 'Presento mi reflexion sobre el acompanamiento realizado y las acciones de mejora identificadas para la proxima sesion.'
+    }
 };
-const almacenamientoDocente = 'rutaPraxis.docente';
-const estadoDocente = JSON.parse(localStorage.getItem(almacenamientoDocente) || '{}');
-let entregaActual = 'mariana';
+const almacenamientoDocente = 'rutaPraxis.docente.v2';
+const estadoDocente = JSON.parse(localStorage.getItem(almacenamientoDocente) || JSON.stringify({ calificaciones: {}, actividades: [], evaluaciones: [] }));
+let entregaActual = document.querySelector('.entrega-item.seleccionada')?.dataset.entrega || 'mariana';
 
 function guardarEstadoDocente() {
     localStorage.setItem(almacenamientoDocente, JSON.stringify(estadoDocente));
@@ -31,6 +55,7 @@ function guardarEstadoDocente() {
 document.querySelectorAll('.entrega-item').forEach(boton => boton.addEventListener('click', () => {
     entregaActual = boton.dataset.entrega;
     const entrega = datosEntregas[boton.dataset.entrega];
+    if (!entrega) return;
     document.querySelectorAll('.entrega-item').forEach(item => item.classList.remove('seleccionada'));
     boton.classList.add('seleccionada');
     document.getElementById('detalle-estudiante').textContent = entrega.estudiante;
@@ -118,29 +143,6 @@ document.getElementById('buscar-estudiante').addEventListener('input', event => 
     document.querySelectorAll('#tabla-estudiantes tr').forEach(fila => fila.hidden = !fila.textContent.toLowerCase().includes(consulta));
 });
 
-document.getElementById('foto-perfil').addEventListener('change', event => {
-    const archivo = event.target.files[0];
-    if (!archivo) return;
-    const lector = new FileReader();
-    lector.addEventListener('load', () => {
-        const foto = document.getElementById('vista-foto');
-        foto.src = lector.result;
-        foto.style.display = 'block';
-        document.getElementById('iniciales-foto').style.display = 'none';
-        estadoDocente.foto = lector.result;
-        guardarEstadoDocente();
-    });
-    lector.readAsDataURL(archivo);
-});
-
-document.getElementById('form-perfil').addEventListener('submit', event => {
-    event.preventDefault();
-    estadoDocente.perfil = { correo: document.getElementById('correo-personal').value, telefono: document.getElementById('telefono').value };
-    guardarEstadoDocente();
-    document.getElementById('estado-perfil').textContent = 'Cambios guardados correctamente.';
-    mostrarNotificacion('Tu informacion de perfil fue actualizada.');
-});
-
 document.querySelector('.escribir-mensaje').addEventListener('submit', event => {
     event.preventDefault();
     const campo = event.currentTarget.querySelector('input');
@@ -157,12 +159,47 @@ document.querySelector('.escribir-mensaje').addEventListener('submit', event => 
 if (estadoDocente.actividades) document.getElementById('lista-actividades').innerHTML = estadoDocente.actividades;
 if (estadoDocente.evaluaciones) document.getElementById('lista-evaluaciones').innerHTML = estadoDocente.evaluaciones;
 if (estadoDocente.mensajes) document.querySelector('.mensajes').innerHTML = estadoDocente.mensajes;
-if (estadoDocente.perfil) {
-    document.getElementById('correo-personal').value = estadoDocente.perfil.correo;
-    document.getElementById('telefono').value = estadoDocente.perfil.telefono;
+
+async function cargarEstudiantesAsignados() {
+    const tabla = document.getElementById('tabla-estudiantes');
+    try {
+        const response = await fetch('/api/teacher/students', { credentials: 'same-origin' });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'No se pudieron cargar los estudiantes asignados.');
+
+        const estudiantes = result.data || [];
+        const unicos = new Set(estudiantes.map(estudiante => estudiante._id));
+        document.getElementById('dato-estudiantes-docente').textContent = unicos.size;
+        document.getElementById('texto-estudiantes-docente').textContent =
+            unicos.size ? `${estudiantes.length} asignaciones entre materias` : 'Sin estudiantes asignados';
+
+        if (!estudiantes.length) {
+            tabla.innerHTML = '<tr><td colspan="5" class="vacio-tabla">No hay estudiantes asignados en tus asignaturas.</td></tr>';
+            return;
+        }
+
+        tabla.replaceChildren(...estudiantes.map(estudiante => {
+            const fila = document.createElement('tr');
+            const nombre = [estudiante.firstName, estudiante.middleName, estudiante.lastName, estudiante.secondLastName]
+                .filter(Boolean).join(' ');
+            const celdas = [
+                nombre,
+                `${estudiante.subject.name}${estudiante.subject.semester ? ` · Semestre ${estudiante.subject.semester}` : ''}`,
+                estudiante.email || 'Sin correo',
+                estudiante.studentCode || 'Sin código',
+                'Asignado'
+            ];
+            celdas.forEach(texto => {
+                const celda = document.createElement('td');
+                celda.textContent = texto;
+                fila.append(celda);
+            });
+            return fila;
+        }));
+    } catch (error) {
+        tabla.innerHTML = '<tr><td colspan="5" class="vacio-tabla">No fue posible cargar las asignaciones. Recarga la página o contacta al administrador.</td></tr>';
+        console.error(error);
+    }
 }
-if (estadoDocente.foto) {
-    document.getElementById('vista-foto').src = estadoDocente.foto;
-    document.getElementById('vista-foto').style.display = 'block';
-    document.getElementById('iniciales-foto').style.display = 'none';
-}
+
+cargarEstudiantesAsignados();

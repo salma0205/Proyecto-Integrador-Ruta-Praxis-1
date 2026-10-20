@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Asesor | Ruta Praxis</title>
     <link rel="stylesheet" href="../css/asesor.css">
+    <link rel="stylesheet" href="../css/workflow.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>
@@ -29,7 +30,7 @@
         <section class="contenido-asesor">
             <header class="barra-superior-asesor">
                 <button class="menu-movil" type="button" aria-label="Abrir menu"><i class="fa-solid fa-bars"></i></button>
-                <div class="acciones-superior"><button class="boton-notificaciones" type="button" aria-label="Notificaciones"><i class="fa-regular fa-bell"></i><span>2</span></button><details class="perfil-asesor"><summary><i class="fa-solid fa-circle-user"></i><span>Perfil del asesor</span><i class="fa-solid fa-chevron-down"></i></summary><div><a href="index.html"><i class="fa-solid fa-right-from-bracket"></i><span>Log out</span></a></div></details></div>
+                <div class="acciones-superior"><button class="boton-notificaciones" type="button" aria-label="Notificaciones"><i class="fa-regular fa-bell"></i><span>2</span></button><details class="perfil-asesor"><summary><i class="fa-solid fa-circle-user"></i><span data-profile-name>Perfil del asesor</span><i class="fa-solid fa-chevron-down"></i></summary><div><a href="index.html" data-logout><i class="fa-solid fa-right-from-bracket"></i><span>Cerrar sesión</span></a></div></details></div>
             </header>
 
             <section class="vista-asesor activa" id="inicio">
@@ -50,11 +51,13 @@
 
             <section class="vista-asesor" id="evaluaciones"><div class="encabezado"><p>Consulta de resultados</p><h2>Evaluaciones</h2><span>Consulta el estado de las evaluaciones aplicadas por el docente.</span></div><article class="bloque-consulta tabla-bloque"><div class="tabla-scroll"><table><thead><tr><th>Evaluacion</th><th>Grupo</th><th>Fecha de cierre</th><th>Calificadas</th><th>Estado</th></tr></thead><tbody><tr><td><strong>Evaluacion de desempeno - Corte 1</strong><small>Competencias pedagogicas y practica</small></td><td>Practica III</td><td>31 may. 2026</td><td>18 de 28</td><td><em class="estado alerta">En curso</em></td></tr><tr><td><strong>Autoevaluacion de practica</strong><small>Reflexion individual del proceso</small></td><td>Practica III</td><td>10 may. 2026</td><td>28 de 28</td><td><em class="estado listo">Finalizada</em></td></tr></tbody></table></div></article></section>
 
-            <section class="vista-asesor" id="perfil"><div class="encabezado"><p>Configuracion personal</p><h2>Mi perfil</h2><span>Actualiza tu informacion de contacto.</span></div><form class="perfil-asesor-form bloque-consulta" id="form-perfil-asesor"><div class="foto-perfil"><span>LM</span><label class="boton-secundario"><i class="fa-solid fa-camera"></i> Elegir foto<input type="file" accept="image/*"></label></div><div class="datos-perfil"><h3>Informacion de contacto</h3><div><label>Nombre completo<input type="text" value="Laura Martinez" readonly></label><label>Correo institucional<input type="email" value="laura.martinez@universidad.edu.co" readonly></label><label>Correo personal<input type="email" value="laura.martinez@gmail.com" required></label><label>Telefono<input type="tel" value="300 555 0812" required></label></div><button class="boton-principal" type="submit"><i class="fa-solid fa-floppy-disk"></i> Guardar cambios</button></div></form></section>
+            <section class="vista-asesor" id="perfil"><div class="encabezado"><p>Configuracion personal</p><h2>Mi perfil</h2><span>Actualiza tu informacion de contacto.</span></div><form class="perfil-asesor-form bloque-consulta" id="form-perfil-asesor"><div class="foto-perfil"><div class="avatar-admin-perfil"><img data-profile-photo alt="Foto de perfil" hidden><span data-profile-initials>AS</span></div><label class="boton-secundario"><i class="fa-solid fa-camera"></i> Elegir foto<input data-profile-photo-input type="file" accept="image/jpeg,image/png,image/webp"></label></div><div class="datos-perfil"><h3>Informacion de contacto</h3><div><label>Nombre completo<input data-profile-full-name type="text" value="" readonly></label><label>Correo institucional<input data-profile-email type="email" value="" readonly></label><label>Correo personal<input data-profile-field="personalEmail" type="email" placeholder="Correo personal"></label><label>Telefono<input data-profile-field="phone" type="tel" placeholder="Telefono"></label></div><button class="boton-principal" type="submit"><i class="fa-solid fa-floppy-disk"></i> Guardar cambios</button></div></form></section>
         </section>
     </main>
     <div class="notificacion" id="notificacion"><i class="fa-solid fa-circle-check"></i><span></span></div>
-    <script src="../js/asesor.js"></script>
+    <script src="../js/auth.js?v=5"></script>
+    <script src="../js/workflow-dashboard.js?v=1"></script>
+    <script src="../js/perfil.js?v=2"></script>
     <script src="../js/interacciones.js"></script>
 </body>
 </html>

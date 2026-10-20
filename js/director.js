@@ -41,12 +41,4 @@ document.getElementById('actualizar-comparacion').addEventListener('click', () =
     mostrarAvisoDirector('El comparativo fue actualizado con los datos disponibles.');
 });
 
-document.getElementById('form-perfil-director').addEventListener('submit', evento => {
-    evento.preventDefault();
-    estadoDirector.perfil = Array.from(document.querySelectorAll('#form-perfil-director input:not([readonly])')).map(campo => campo.value);
-    localStorage.setItem(almacenamientoDirector, JSON.stringify(estadoDirector));
-    mostrarAvisoDirector('La informacion de perfil fue actualizada.');
-});
-
 if (estadoDirector.tipoComparacion) document.getElementById('tipo-comparacion').value = estadoDirector.tipoComparacion;
-if (estadoDirector.perfil) document.querySelectorAll('#form-perfil-director input:not([readonly])').forEach((campo, indice) => campo.value = estadoDirector.perfil[indice] || campo.value);

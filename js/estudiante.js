@@ -1,15 +1,6 @@
-const claveEstudiante = 'rutaPraxis.estudiante';
+const claveEstudiante = 'rutaPraxis.estudiante.v2';
 const estadoEstudiante = JSON.parse(localStorage.getItem(claveEstudiante) || '{}');
-const camposEditablesEstudiante = document.querySelectorAll('.perfil-personal-estudiante input:not([readonly])');
-const botonGuardarEstudiante = document.getElementById('guardar-perfil-estudiante');
-const entradaFotoEstudiante = document.querySelector('.perfil-personal-estudiante input[type="file"]');
-const avatarEstudiante = document.querySelector('.avatar-perfil');
 const formulariosActividad = document.querySelectorAll('.entrega-actividad');
-
-function guardarPerfilEstudiante() {
-    estadoEstudiante.perfil = Array.from(camposEditablesEstudiante).map(campo => campo.value);
-    localStorage.setItem(claveEstudiante, JSON.stringify(estadoEstudiante));
-}
 
 function guardarEstadoEstudiante() {
     localStorage.setItem(claveEstudiante, JSON.stringify(estadoEstudiante));
@@ -57,32 +48,6 @@ function marcarActividadEnviada(detalle, enviada, texto = 'Actividad enviada') {
     estado.classList.toggle('estado-revision', !enviada);
     estado.classList.remove('estado-rechazada');
 }
-
-if (estadoEstudiante.perfil) {
-    camposEditablesEstudiante.forEach((campo, indice) => campo.value = estadoEstudiante.perfil[indice] || campo.value);
-}
-if (estadoEstudiante.foto) {
-    avatarEstudiante.innerHTML = `<img src="${estadoEstudiante.foto}" alt="Foto de perfil">`;
-}
-
-botonGuardarEstudiante.addEventListener('click', evento => {
-    evento.preventDefault();
-    guardarPerfilEstudiante();
-    botonGuardarEstudiante.querySelector('span').textContent = 'Cambios guardados';
-    setTimeout(() => botonGuardarEstudiante.querySelector('span').textContent = 'Guardar cambios', 2200);
-});
-
-entradaFotoEstudiante.addEventListener('change', evento => {
-    const archivo = evento.target.files[0];
-    if (!archivo) return;
-    const lector = new FileReader();
-    lector.addEventListener('load', () => {
-        estadoEstudiante.foto = lector.result;
-        guardarPerfilEstudiante();
-        avatarEstudiante.innerHTML = `<img src="${lector.result}" alt="Foto de perfil">`;
-    });
-    lector.readAsDataURL(archivo);
-});
 
 formulariosActividad.forEach(formulario => {
     const detalle = formulario.closest('.detalle-actividad, .detalle-evidencia, .detalle-evaluacion');

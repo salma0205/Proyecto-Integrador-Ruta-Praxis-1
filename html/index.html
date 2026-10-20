@@ -16,7 +16,7 @@
     <title>Ruta Praxis</title>
     <!-- Define el titulo que aparece en la pestana del navegador. -->
 
-    <link rel="stylesheet" href="../css/index.css">
+    <link rel="stylesheet" href="../css/index.css?v=4">
     <!-- Conecta este HTML con su propio archivo de estilos CSS. -->
 
     <link rel="stylesheet"
@@ -26,9 +26,6 @@
 <!-- Cierra la cabeza del documento. -->
 
 <body>
-    <a href="html/index.html">entrar sitio web </a>
-    <!-- Abre el cuerpo de la pagina, que contiene todo lo visible. -->
-
     <main class="pagina-login">
         <!-- Contenedor principal de toda la pantalla de inicio de sesion. -->
 
@@ -38,39 +35,20 @@
             <h1>Bienvenidos a la ruta praxis</h1>
             <!-- Titulo principal de bienvenida. -->
 
-            <form class="formulario-login" id="formulario-login" action="estudiante.html" method="get">
+            <form class="formulario-login" id="formulario-login" autocomplete="off" hidden>
                 <!-- Formulario que agrupa los campos de acceso y envia a la pagina del estudiante. -->
 
-                <div class="campo campo-select">
-                    <!-- Campo del menu desplegable para seleccionar el rol. -->
-
-                    <i class="fa-solid fa-circle-user"></i>
-                    <!-- Icono de usuario ubicado al lado izquierdo del selector. -->
-
-                    <select id="rol-acceso" required>
-                        <!-- Menu desplegable obligatorio para escoger un rol. -->
-
-                        <option value="" disabled selected hidden>Selecciona tu rol</option>
-                        <!-- Texto inicial del selector; no se puede elegir como opcion real. -->
-
-                        <option value="estudiante">Estudiante</option>
-                        <!-- Opcion disponible y funcional por ahora para ingresar como estudiante. -->
-
+                <div class="campo">
+                    <i class="fa-solid fa-users-gear"></i>
+                    <select id="rol-acceso" aria-label="Selecciona el rol de acceso" required>
+                        <option value="">Selecciona tu rol</option>
                         <option value="administrador">Administrador</option>
-                        <!-- Opcion de administrador; por ahora no tiene pagina funcional. -->
-
-                        <option value="docente">Docente</option>
-                        <!-- Opcion de docente; por ahora no tiene pagina funcional. -->
-
-                        <option value="asesor">Asesor</option>
-                        <!-- Opcion de asesor; por ahora no tiene pagina funcional. -->
-
                         <option value="director">Director</option>
-                        <!-- Opcion de director disponible para el acceso al sistema. -->
+                        <option value="docente">Docente</option>
+                        <option value="asesor">Asesor</option>
+                        <option value="estudiante">Estudiante</option>
                     </select>
-                    <!-- Cierra el menu desplegable. -->
                 </div>
-                <!-- Cierra el campo del selector de rol. -->
 
                 <div class="campo">
                     <!-- Campo para escribir el correo electronico. -->
@@ -78,8 +56,8 @@
                     <i class="fa-regular fa-envelope"></i>
                     <!-- Icono de sobre para representar el correo. -->
 
-                    <input type="email" placeholder="Correo electrónico" required>
-                    <!-- Entrada obligatoria de tipo email con texto guia para el correo. -->
+                    <input id="correo-acceso" type="text" autocomplete="off" placeholder="Usuario o correo electrónico" required>
+                    <!-- Identificador de acceso: usuario administrador o correo institucional. -->
                 </div>
                 <!-- Cierra el campo del correo electronico. -->
 
@@ -89,7 +67,7 @@
                     <i class="fa-solid fa-lock"></i>
                     <!-- Icono de candado para representar seguridad o contrasena. -->
 
-                    <input type="password" placeholder="Contraseña" required>
+                    <input id="contrasena-acceso" type="password" autocomplete="off" placeholder="Contraseña" required>
                     <!-- Entrada obligatoria de tipo password; oculta los caracteres escritos. -->
                 </div>
                 <!-- Cierra el campo de contrasena. -->
@@ -108,42 +86,41 @@
                     </label>
                     <!-- Cierra el grupo del checkbox. -->
 
-                    <a href="#">¿Olvidaste tu contraseña?</a>
+                    <span>Acceso con las credenciales creadas por el administrador.</span>
                     <!-- Enlace visual para recuperar la contrasena. -->
+                </div>
+                <div class="roles-login" aria-label="Selecciona tu tipo de usuario">
+                    <button type="button" data-login-role="administrador">Administrador</button>
+                    <button type="button" data-login-role="director">Director</button>
+                    <button type="button" data-login-role="docente">Docente</button>
+                    <button type="button" data-login-role="asesor">Asesor</button>
+                    <button type="button" data-login-role="estudiante">Estudiante</button>
                 </div>
                 <!-- Cierra las opciones adicionales del login. -->
 
                 <button type="submit">Acceder al sistema</button>
                 <!-- Boton que envia el formulario. -->
             </form>
+            <p id="mensaje-autenticacion" role="alert" aria-live="polite"></p>
+            <section id="configuracion-administrador" hidden>
+                <h2>Crear administrador inicial</h2>
+                <p>Este formulario solo aparece si todavía no existe un administrador.</p>
+                <form class="formulario-login" id="formulario-administrador-inicial" autocomplete="off">
+                    <div class="campo"><input name="firstName" type="text" autocomplete="off" placeholder="Nombre" required></div>
+                    <div class="campo"><input name="lastName" type="text" autocomplete="off" placeholder="Apellido" required></div>
+                    <div class="campo"><input name="username" type="text" autocomplete="off" minlength="3" maxlength="40" pattern="[-A-Za-z0-9._]+" value="admin" placeholder="Nombre de usuario (sin @)" required></div>
+                    <div class="campo"><input name="password" type="password" autocomplete="off" minlength="10" placeholder="Contraseña (mínimo 10 caracteres)" required></div>
+                    <button type="submit">Crear administrador inicial</button>
+                </form>
+            </section>
             <!-- Cierra el formulario. -->
         </section>
         <!-- Cierra el panel central del login. -->
     </main>
     <!-- Cierra el contenedor principal de la pagina. -->
 
+    <script src="../js/auth.js?v=5"></script>
     <script src="../js/interacciones.js"></script>
-    <script>
-        document.getElementById('formulario-login').addEventListener('submit', function (event) {
-            var rolSeleccionado = document.getElementById('rol-acceso').value;
-            if (rolSeleccionado === 'docente') {
-                event.preventDefault();
-                window.location.href = 'docente.html';
-            }
-            if (rolSeleccionado === 'asesor') {
-                event.preventDefault();
-                window.location.href = 'asesor.html';
-            }
-            if (rolSeleccionado === 'administrador') {
-                event.preventDefault();
-                window.location.href = 'administrador.html';
-            }
-            if (rolSeleccionado === 'director') {
-                event.preventDefault();
-                window.location.href = 'director.html';
-            }
-        });
-    </script>
 </body>
 <!-- Cierra el cuerpo del documento. -->
 

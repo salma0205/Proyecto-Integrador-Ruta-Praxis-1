@@ -17,6 +17,8 @@
     <!-- Define el titulo que aparece en la pestana del navegador. -->
 
     <link rel="stylesheet" href="../css/estudiante.css">
+    <link rel="stylesheet" href="../css/perfil.css">
+    <link rel="stylesheet" href="../css/workflow.css">
     <!-- Conecta esta pagina con su propio archivo CSS. -->
 
     <link rel="stylesheet"
@@ -175,7 +177,7 @@
                         <i class="fa-solid fa-circle-user"></i>
                         <!-- Icono que representa el perfil del estudiante. -->
 
-                        <span>Perfil del estudiante</span>
+                        <span data-profile-name>Perfil del estudiante</span>
                         <!-- Texto del perfil del estudiante. -->
 
                         <i class="fa-solid fa-chevron-down"></i>
@@ -186,7 +188,7 @@
                     <div class="menu-perfil-estudiante">
                         <!-- Contenedor de las opciones que se despliegan debajo del perfil. -->
 
-                        <a href="index.html" class="cerrar-sesion">
+                        <a href="index.html" class="cerrar-sesion" data-logout>
                         <!-- Enlace para volver al login principal. -->
 
                             <i class="fa-solid fa-right-from-bracket"></i>
@@ -228,38 +230,38 @@
 
                     <div class="resumen-practica">
                         <h4>Pr&aacute;ctica III - Profundizaci&oacute;n</h4>
-                        <p>Instituci&oacute;n Educativa La Esperanza</p>
+                        <p>Sin institucion</p>
                     </div>
 
                     <div class="datos-practica">
                         <div>
                             <span>Docente asesor</span>
-                            <strong>Juan Carlos P&eacute;rez</strong>
+                            <strong>Sin asignar</strong>
                         </div>
 
                         <div>
                             <span>Periodo acad&eacute;mico</span>
-                            <strong>2026-I</strong>
+                            <strong>--</strong>
                         </div>
 
                         <div>
                             <span>Fecha de inicio</span>
-                            <strong>18/05/2026</strong>
+                            <strong>--</strong>
                         </div>
 
                         <div>
                             <span>Fecha de finalizaci&oacute;n</span>
-                            <strong>20/06/2026</strong>
+                            <strong>--</strong>
                         </div>
 
                         <div>
                             <span>Horas reglamentarias</span>
-                            <strong>120 horas</strong>
+                            <strong>0 horas</strong>
                         </div>
 
                         <div>
                             <span>Horas realizadas</span>
-                            <strong>72 horas</strong>
+                            <strong>0 horas</strong>
                         </div>
                     </div>
                 </article>
@@ -299,7 +301,7 @@
                             <summary>
                                 <span>1</span>
                                 <span>Planeaci&oacute;n de clase</span>
-                                <span>Juan Carlos P&eacute;rez</span>
+                                <span>Sin asignar</span>
                                 <span>Planeaci&oacute;n</span>
                                 <span>25/05/2026</span>
                                 <span>10:30 a. m.</span>
@@ -857,14 +859,12 @@
                         <!-- Columna para la foto de perfil. -->
 
                         <aside class="foto-perfil">
-                            <div class="avatar-perfil">
-                                <i class="fa-solid fa-user"></i>
-                            </div>
+                            <div class="avatar-perfil"><img data-profile-photo alt="Foto de perfil" hidden><span data-profile-initials>ES</span></div>
 
                             <label class="boton-foto-perfil">
                                 <i class="fa-solid fa-camera"></i>
                                 <span>Elegir foto</span>
-                                <input type="file" accept="image/*">
+                                <input data-profile-photo-input type="file" accept="image/jpeg,image/png,image/webp">
                             </label>
                         </aside>
 
@@ -877,27 +877,27 @@
                                 <div class="campos-perfil">
                                     <label>
                                         <span>Nombre completo</span>
-                                        <input type="text" value="Laura Daniela G&oacute;mez R&iacute;os" readonly>
+                                        <input data-profile-full-name type="text" value="" readonly>
                                     </label>
 
                                     <label>
                                         <span>Documento</span>
-                                        <input type="text" value="1.023.456.789" readonly>
+                                        <input data-profile-document type="text" value="" readonly>
                                     </label>
 
                                     <label>
                                         <span>Correo institucional</span>
-                                        <input type="email" value="laura.gomez@institucion.edu.co" readonly>
+                                        <input data-profile-email type="email" value="" readonly>
                                     </label>
 
                                     <label>
                                         <span>Correo personal</span>
-                                        <input type="email" value="lauragomez@email.com">
+                                        <input type="email" data-profile-field="personalEmail">
                                     </label>
 
                                     <label>
                                         <span>Tel&eacute;fono</span>
-                                        <input type="tel" value="300 123 4567">
+                                        <input type="tel" data-profile-field="phone">
                                     </label>
                                 </div>
                             </section>
@@ -908,17 +908,17 @@
                                 <div class="campos-perfil">
                                     <label>
                                         <span>Semestre</span>
-                                        <input type="text" value="S&eacute;ptimo semestre" readonly>
+                                        <input data-profile-semester type="text" value="" readonly>
                                     </label>
 
                                     <label>
                                         <span>Programa acad&eacute;mico</span>
-                                        <input type="text" value="Licenciatura en Educaci&oacute;n B&aacute;sica" readonly>
+                                        <input data-profile-program type="text" value="" readonly>
                                     </label>
 
                                     <label>
                                         <span>Estado</span>
-                                        <input type="text" value="Activo" readonly>
+                                        <input data-profile-active type="text" value="" readonly>
                                     </label>
                                 </div>
                             </section>
@@ -931,7 +931,9 @@
         <!-- Cierra el contenido principal del estudiante. -->
     </main>
     <!-- Cierra el contenedor principal de la pagina del estudiante. -->
-    <script src="../js/estudiante.js"></script>
+    <script src="../js/auth.js?v=5"></script>
+    <script src="../js/workflow-dashboard.js?v=1"></script>
+    <script src="../js/perfil.js?v=2"></script>
     <script src="../js/interacciones.js"></script>
 </body>
 <!-- Cierra el cuerpo del documento. -->
