@@ -107,4 +107,10 @@ Los formularios de programas, asignaturas, instituciones y prácticas se guardan
 
 El backend y los formularios administrativos principales usan MongoDB. Las demás herramientas de seguimiento académico deben validarse y conectarse a sus endpoints antes de desplegar el sistema. El servidor escucha en `127.0.0.1` y está pensado para desarrollo local. La carga real de archivos requiere un servicio de almacenamiento antes de exponerlo a una red.
 
+## Publicar en Render
+
+El archivo `render.yaml` configura un servicio web Node.js para servir la web y el backend en el mismo dominio. En Render, crea un **Blueprint** a partir del repositorio de GitHub y define `MONGODB_URI` como una variable secreta con la cadena de conexión de MongoDB Atlas. `JWT_SECRET` se genera automáticamente. En Atlas, autoriza las conexiones entrantes del servicio Render según la política de red que elijas; evita publicar credenciales o la URI en el repositorio.
+
+Tras completar el despliegue, Render proporciona una dirección pública `https://...onrender.com` que se puede guardar como marcador o acceso directo. En el plan gratuito el servicio puede suspenderse tras un periodo sin tráfico y tardar unos momentos en responder a la primera visita; el plan `free` en `render.yaml` puede cambiarse desde Render si se necesita un servicio siempre activo.
+
 Los registros de administración se leen desde MongoDB y no se restauran desde el almacenamiento local del navegador; así se evitan datos de demostración o antiguos que no estén en la base de datos. El estado local anterior del prototipo no se migra automáticamente.

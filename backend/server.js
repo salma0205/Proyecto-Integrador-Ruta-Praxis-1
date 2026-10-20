@@ -14,7 +14,9 @@ const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || '127.0.0.1';
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors({ origin: process.env.CORS_ORIGIN || `http://${host}:${port}` }));
+if (process.env.CORS_ORIGIN) {
+    app.use(cors({ origin: process.env.CORS_ORIGIN }));
+}
 app.use(express.json({ limit: '7mb' }));
 
 app.get('/api/health', (req, res) => {
