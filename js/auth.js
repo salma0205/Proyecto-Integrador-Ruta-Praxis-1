@@ -11,6 +11,9 @@
     const setupPanel = document.getElementById('configuracion-administrador');
     const message = document.getElementById('mensaje-autenticacion');
     const roleSelect = document.getElementById('rol-acceso');
+    const recoveryDialog = document.getElementById('dialogo-recuperacion');
+    const recoveryForm = document.getElementById('formulario-recuperacion');
+    const recoveryMessage = document.getElementById('mensaje-recuperacion');
 
     async function request(url, options = {}) {
         const response = await fetch(url, {
@@ -82,6 +85,34 @@
             button.addEventListener('click', () => setLoginRole(button.dataset.loginRole));
         });
         roleSelect?.addEventListener('change', () => setLoginRole(roleSelect.value));
+        document.getElementById('abrir-recuperacion')?.addEventListener('click', () => {
+            recoveryForm?.reset();
+            if (recoveryMessage) recoveryMessage.textContent = '';
+            recoveryDialog?.showModal();
+        });
+        ['cerrar-recuperacion', 'cancelar-recuperacion'].forEach(id => {
+            document.getElementById(id)?.addEventListener('click', () => recoveryDialog?.close());
+        });
+
+        recoveryForm?.addEventListener('submit', async event => {
+            event.preventDefault();
+            const button = recoveryForm.querySelector('[type="submit"]');
+            button.disabled = true;
+            if (recoveryMessage) recoveryMessage.textContent = '';
+            try {
+                const body = Object.fromEntries(new FormData(recoveryForm).entries());
+                const result = await request('/api/auth/recovery-requests', {
+                    method: 'POST',
+                    body: JSON.stringify(body)
+                });
+                recoveryForm.reset();
+                if (recoveryMessage) recoveryMessage.textContent = result.message;
+            } catch (error) {
+                if (recoveryMessage) recoveryMessage.textContent = error.message;
+            } finally {
+                button.disabled = false;
+            }
+        });
 
         loginForm.addEventListener('submit', async event => {
             event.preventDefault();

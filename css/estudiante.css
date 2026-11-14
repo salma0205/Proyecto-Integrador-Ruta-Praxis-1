@@ -104,6 +104,7 @@ body {
 
 /* Barra superior del area principal. */
 .barra-superior-estudiante {
+    position: relative;
     display: flex;
     justify-content: flex-end;
     align-items: center;
@@ -151,6 +152,58 @@ body {
     font-size: 11px;
     font-weight: 700;
 }
+
+.contador-notificaciones[hidden] { display: none; }
+.rp-notification-panel {
+    position: absolute;
+    top: 54px;
+    right: 0;
+    z-index: 1200;
+    width: min(390px, calc(100vw - 32px));
+    max-height: min(70vh, 560px);
+    overflow: hidden;
+    border: 1px solid rgba(125, 220, 255, .32);
+    border-radius: 10px;
+    color: #eef9ff;
+    background: #091a2e;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .4);
+}
+.rp-notification-panel[hidden] { display: none; }
+.rp-notification-panel > header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(144, 221, 255, .18);
+}
+.rp-notification-panel > header strong { color: #fff; font-size: 16px; }
+.rp-notification-read-all {
+    border: 0;
+    color: #7ddcff;
+    background: transparent;
+    font-size: 11px;
+    cursor: pointer;
+}
+.rp-notification-read-all:disabled { opacity: .45; cursor: default; }
+.rp-notification-list { max-height: min(60vh, 490px); overflow-y: auto; }
+.rp-notification-item {
+    width: 100%;
+    display: grid;
+    gap: 6px;
+    padding: 13px 16px;
+    border: 0;
+    border-bottom: 1px solid rgba(144, 221, 255, .12);
+    color: rgba(240, 248, 255, .86);
+    background: rgba(125, 220, 255, .07);
+    text-align: left;
+    cursor: pointer;
+}
+.rp-notification-item:hover { background: rgba(125, 220, 255, .14); }
+.rp-notification-item.leida { background: transparent; }
+.rp-notification-item strong { color: #fff; font-size: 13px; }
+.rp-notification-item span { font-size: 12px; line-height: 1.45; }
+.rp-notification-item small { color: rgba(240, 248, 255, .58); font-size: 10px; }
 
 /* Perfil ubicado en la parte superior derecha. */
 .perfil-estudiante {

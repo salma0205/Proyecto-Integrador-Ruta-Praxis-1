@@ -1,7 +1,40 @@
 # Ruta Praxis
-URL PAG:https://ruta-praxis.onrender.com
 
-Aplicacion web para apoyar el seguimiento de practicas academicas entre estudiantes, docentes y administradores.
+URL oficial de la aplicacion: https://ruta-praxis.onrender.com
+
+Aplicacion web para apoyar el seguimiento de practicas academicas entre estudiantes, docentes, asesores, directores y administradores.
+
+## Alcance del MVP actual
+
+El proyecto actual se enfoca en un MVP funcional para los siguientes roles:
+
+- Administrador
+- Estudiante
+- Docente
+- Asesor
+- Director
+
+Dentro del alcance implementado quedan:
+
+- gestion de usuarios, programas, asignaturas, instituciones y tipos de practica
+- asignacion y aprobacion de practicas
+- creacion de actividades docentes
+- entregas de estudiantes con evidencias por URL
+- revisiones, observaciones, horas y evaluaciones
+- dashboard y indicadores por rol
+- historial de auditoria administrativa
+
+Fuera del alcance del MVP actual quedan:
+
+- Coordinador
+- visitas complejas y asistencia programada
+- carga real de archivos a almacenamiento externo
+- rubricas configurables avanzadas
+- notificaciones push
+- agenda de visitas institucionales
+- reportes PDF o exportacion avanzada extra
+
+Esto se documenta de forma explicita para evitar confundir el alcance real de la entrega final con los requisitos extendidos del proyecto conceptual.
 
 ## Base de datos y backend
 
@@ -90,9 +123,13 @@ Ejemplo para crear un usuario:
 }
 ```
 
-Abre `http://127.0.0.1:3000`. Si todavía no existe un administrador, aparecerá un formulario de configuración inicial; crea su nombre de usuario sin `@` y una contraseña de al menos 10 caracteres. Después inicia sesión con ese usuario. Para los roles académicos se exige un correo electrónico válido. El panel de administración permite listar, crear, editar, activar, desactivar y eliminar usuarios; cada cuenta nueva debe tener contraseña. Las contraseñas se guardan con bcrypt y la sesión viaja en una cookie `HttpOnly`.
+Abre `http://127.0.0.1:3000`. Si todavía no existe un administrador, aparecerá un formulario de configuración inicial; crea su nombre de usuario sin `@` y una contraseña de 1 a 10 caracteres. Después inicia sesión con ese usuario. Para los roles académicos se exige un correo electrónico válido. El panel de administración permite listar, crear, editar, activar, desactivar y eliminar usuarios; cada cuenta nueva debe tener contraseña. Las contraseñas se guardan con bcrypt y la sesión viaja en una cookie `HttpOnly`.
 
-Los perfiles de administrador, director, docente, asesor y estudiante muestran el nombre real de la cuenta y permiten guardar correo personal, teléfono y una foto JPG, PNG o WEBP de hasta 5 MB en MongoDB. Si no hay foto, se muestran las iniciales del nombre. El botón de notificaciones del panel de administración informa cuando no hay novedades pendientes.
+Si olvidaste la contraseña del único administrador, desde la raíz del proyecto ejecuta `npm run reset-admin-password` en PowerShell. La herramienta se conecta usando `MONGODB_URI` del `.env`, muestra los nombres de las cuentas administradoras y actualiza solo la cuenta que confirmes. La nueva contraseña debe tener de 1 a 10 caracteres; se escribe de forma oculta y no se puede recuperar la anterior. No compartas el archivo `.env`.
+
+En el inicio de sesión está la opción **¿Olvidaste tu usuario o contraseña?**. La persona envía su nombre, correo de contacto, dato de cuenta si lo recuerda y el tipo de ayuda que solicita. El administrador recibe la solicitud en **Solicitudes de acceso** y en el contador de notificaciones del panel. El sistema no revela ni puede recuperar la contraseña anterior, y no envía correos automáticamente: el administrador debe verificar la identidad y comunicar el acceso por un canal institucional.
+
+Los perfiles de administrador, director, docente, asesor y estudiante muestran el nombre real de la cuenta y permiten guardar correo personal, teléfono y una foto JPG, PNG o WEBP de hasta 5 MB en MongoDB. Si no hay foto, se muestran las iniciales del nombre.
 
 En el panel administrador, usa **Programas académicos** para registrar cada nombre y, si ya existe una cuenta con rol Director, asignarla como responsable. El director puede quedar sin asignar y añadirse después al editar el programa. En **Gestionar usuarios** se pueden crear estudiantes, asesores, directores y docentes; cada usuario elige un programa activo y una o varias asignaturas registradas. Los cuatro roles acceden a sus paneles al iniciar sesión.
 
@@ -106,7 +143,31 @@ Los formularios de programas, asignaturas, instituciones y prácticas se guardan
 
 ## Alcance y seguridad
 
-El backend y los formularios administrativos principales usan MongoDB. Las demás herramientas de seguimiento académico deben validarse y conectarse a sus endpoints antes de desplegar el sistema. El servidor escucha en `127.0.0.1` y está pensado para desarrollo local. La carga real de archivos requiere un servicio de almacenamiento antes de exponerlo a una red.
+El backend y los formularios administrativos principales usan MongoDB. El sistema cumple con la base funcional del proyecto para el seguimiento de practicas academicas en los roles definidos en el MVP. Las funcionalidades que quedaron fuera del alcance se consideran ampliaciones futuras y no forman parte de la entrega actual.
+
+El servidor escucha en `127.0.0.1` y está pensado para desarrollo local. La carga real de archivos requiere un servicio de almacenamiento antes de exponerlo a una red.
+
+## Entregables recomendados para la defensa
+
+Para cerrar el proyecto académico, se recomienda entregar al menos lo siguiente:
+
+- diagrama de casos de uso
+- diagrama de clases / dominio
+- modelo entidad-relacion y modelo relacional
+- diccionario de datos
+- prototipo de alta fidelidad
+- evidencia de CRUD de tablas principales
+- pruebas de flujo principal del sistema
+- manual de usuario
+- manual tecnico
+- video de funcionamiento
+- articulo final en formato IEEE o equivalente
+
+## Estado actual del proyecto
+
+El proyecto ya tiene una base funcional valida para el seguimiento de practicas academicas con roles diferenciados por permisos. La parte central del negocio queda resuelta para la gestion operativa de practicas, actividades, entregas, horas, observaciones y evaluaciones.
+
+El trabajo pendiente más importante es cerrar la documentacion academica y dejar definido de forma clara el alcance real de la entrega final.
 
 ## Publicar en Render
 

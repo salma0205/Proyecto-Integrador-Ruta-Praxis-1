@@ -5,6 +5,9 @@ const {
     AcademicProgram,
     AcademicSubject,
     PracticeAssignment,
+    Activity,
+    Submission,
+    Observation,
     Evaluation,
     PracticeLog,
     AdminAudit
@@ -187,4 +190,70 @@ test('la auditoría administrativa exige actor, acción y detalle válidos', asy
 
     entry.action = 'viewed';
     await assert.rejects(entry.validate(), { name: 'ValidationError' });
+});
+
+test('el flujo académico exige aprobación antes de actividades, entregas y horas', async () => {
+    const assignment = new PracticeAssignment({
+        practiceType: '507f1f77bcf86cd799439011',
+        student: '507f1f77bcf86cd799439012',
+        teacher: '507f1f77bcf86cd799439013',
+        institution: '507f1f77bcf86cd799439014',
+        startDate: '2026-06-01',
+        endDate: '2026-06-10',
+        approvalStatus: 'pendiente'
+    });
+
+    await assert.doesNotReject(assignment.validate());
+
+    assignment.approvalStatus = 'aprobada';
+    assignment.approvedAt = new Date('2026-06-02');
+    await assert.doesNotReject(assignment.validate());
+
+    const activity = new Activity({
+        assignment: '507f1f77bcf86cd799439011',
+        author: '507f1f77bcf86cd799439013',
+        title: 'Clase de observación',
+        instructions: 'Realiza 3 observaciones y entrega el plan de clase.',
+        status: 'activa'
+    });
+    await assert.doesNotReject(activity.validate());
+
+    const log = new PracticeLog({
+        assignment: '507f1f77bcf86cd799439011',
+        student: '507f1f77bcf86cd799439012',
+        date: '2026-06-06',
+        hours: 4,
+        activityDescription: 'Participación docente en acompañamiento de práctica.'
+    });
+    await assert.doesNotReject(log.validate());
+});
+
+test('las entregas y observaciones aceptan evidencias y autores permitidos', async () => {
+    const submission = new Submission({
+        activity: '507f1f77bcf86cd799439011',
+        assignment: '507f1f77bcf86cd799439011',
+        student: '507f1f77bcf86cd799439012',
+        response: 'Se entregó la evidencia solicitada.',
+        evidence: [{
+            name: 'plan-clase.pdf',
+            url: 'https://example.com/plan-clase.pdf',
+            mimeType: 'application/pdf',
+            sizeBytes: 2048
+        }],
+        status: 'en_revision'
+    });
+    await assert.doesNotReject(submission.validate());
+
+    const observation = new Observation({
+        assignment: '507f1f77bcf86cd799439011',
+        student: '507f1f77bcf86cd799439012',
+        author: '507f1f77bcf86cd799439013',
+        category: 'seguimiento',
+        body: 'El estudiante avanzó de forma adecuada y cumple el cronograma.',
+        visibleToStudent: true
+    });
+    await assert.doesNotReject(observation.validate());
+
+    observation.author = 'no-es-un-objectid';
+    await assert.rejects(observation.validate(), { name: 'ValidationError' });
 });

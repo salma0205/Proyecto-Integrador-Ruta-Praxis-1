@@ -16,7 +16,7 @@
     <title>Ruta Praxis</title>
     <!-- Define el titulo que aparece en la pestana del navegador. -->
 
-    <link rel="stylesheet" href="../css/index.css?v=4">
+    <link rel="stylesheet" href="../css/index.css?v=5">
     <!-- Conecta este HTML con su propio archivo de estilos CSS. -->
 
     <link rel="stylesheet"
@@ -99,9 +99,37 @@
                 <!-- Cierra las opciones adicionales del login. -->
 
                 <button type="submit">Acceder al sistema</button>
-                <!-- Boton que envia el formulario. -->
+                <button id="abrir-recuperacion" type="button" class="enlace-recuperacion">¿Olvidaste tu usuario o contraseña?</button>
             </form>
             <p id="mensaje-autenticacion" role="alert" aria-live="polite"></p>
+            <dialog id="dialogo-recuperacion" class="dialogo-recuperacion">
+                <form id="formulario-recuperacion" autocomplete="off">
+                    <button id="cerrar-recuperacion" class="cerrar-recuperacion" type="button" aria-label="Cerrar">×</button>
+                    <h2>Solicitar recuperación de acceso</h2>
+                    <p>El administrador revisará tu solicitud. No se envían correos automáticos; incluye un correo de contacto que puedas consultar.</p>
+                    <label>Nombre completo
+                        <input name="fullName" type="text" minlength="2" maxlength="160" autocomplete="name" required>
+                    </label>
+                    <label>Correo de contacto
+                        <input name="contactEmail" type="email" maxlength="254" autocomplete="email" required>
+                    </label>
+                    <label>Correo o usuario de la cuenta <span>(si lo recuerdas)</span>
+                        <input name="accountIdentifier" type="text" maxlength="254" autocomplete="off">
+                    </label>
+                    <label>¿Qué necesitas recuperar?
+                        <select name="requestType" required>
+                            <option value="usuario">Mi nombre de usuario</option>
+                            <option value="contrasena">Mi contraseña</option>
+                            <option value="ambos">Mi usuario y contraseña</option>
+                        </select>
+                    </label>
+                    <p id="mensaje-recuperacion" role="status" aria-live="polite"></p>
+                    <div class="acciones-recuperacion">
+                        <button id="cancelar-recuperacion" type="button">Cancelar</button>
+                        <button type="submit">Enviar solicitud</button>
+                    </div>
+                </form>
+            </dialog>
             <section id="configuracion-administrador" hidden>
                 <h2>Crear administrador inicial</h2>
                 <p>Este formulario solo aparece si todavía no existe un administrador.</p>
@@ -109,7 +137,7 @@
                     <div class="campo"><input name="firstName" type="text" autocomplete="off" placeholder="Nombre" required></div>
                     <div class="campo"><input name="lastName" type="text" autocomplete="off" placeholder="Apellido" required></div>
                     <div class="campo"><input name="username" type="text" autocomplete="off" minlength="3" maxlength="40" pattern="[-A-Za-z0-9._]+" value="admin" placeholder="Nombre de usuario (sin @)" required></div>
-                    <div class="campo"><input name="password" type="password" autocomplete="off" minlength="10" placeholder="Contraseña (mínimo 10 caracteres)" required></div>
+                    <div class="campo"><input name="password" type="password" autocomplete="off" minlength="1" maxlength="10" placeholder="Contraseña (de 1 a 10 caracteres)" required></div>
                     <button type="submit">Crear administrador inicial</button>
                 </form>
             </section>
@@ -119,7 +147,7 @@
     </main>
     <!-- Cierra el contenedor principal de la pagina. -->
 
-    <script src="../js/auth.js?v=5"></script>
+    <script src="../js/auth.js?v=6"></script>
     <script src="../js/interacciones.js"></script>
 </body>
 <!-- Cierra el cuerpo del documento. -->

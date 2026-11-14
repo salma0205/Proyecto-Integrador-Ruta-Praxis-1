@@ -423,3 +423,108 @@ button:hover {
         height: 42px;
     }
 }
+
+.enlace-recuperacion {
+    height: auto;
+    padding: 2px;
+    color: #bceaff;
+    background: transparent;
+    font-size: 13px;
+}
+
+.enlace-recuperacion:hover {
+    color: #fff;
+    background: transparent;
+    text-decoration: underline;
+    transform: none;
+}
+
+.dialogo-recuperacion {
+    width: min(92vw, 460px);
+    max-height: 90vh;
+    margin: auto;
+    overflow: auto;
+    border: 1px solid rgba(144, 221, 255, 0.3);
+    border-radius: 8px;
+    color: #eef9ff;
+    background: #091a2e;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+}
+
+.dialogo-recuperacion::backdrop {
+    background: rgba(3, 12, 24, 0.78);
+}
+
+.formulario-recuperacion {
+    display: grid;
+    gap: 14px;
+    padding: 26px;
+}
+
+.formulario-recuperacion h2 {
+    padding-right: 28px;
+    color: #fff;
+    font-family: Georgia, serif;
+    font-size: 22px;
+}
+
+.formulario-recuperacion p {
+    color: rgba(240, 248, 255, 0.78);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.formulario-recuperacion label {
+    display: grid;
+    gap: 6px;
+    color: #eef9ff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.formulario-recuperacion label span {
+    color: rgba(240, 248, 255, 0.62);
+    font-size: 11px;
+    font-weight: 400;
+}
+
+.formulario-recuperacion input,
+.formulario-recuperacion select {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid rgba(144, 221, 255, 0.3);
+    border-radius: 5px;
+    padding: 8px 10px;
+    color: #fff;
+    background: rgba(9, 26, 46, 0.8);
+}
+
+.formulario-recuperacion select option {
+    color: #fff;
+    background: #091a2e;
+}
+
+.acciones-recuperacion {
+    display: flex;
+    gap: 10px;
+}
+
+.acciones-recuperacion button {
+    flex: 1;
+}
+
+.acciones-recuperacion button:first-child {
+    border: 1px solid rgba(144, 221, 255, 0.3);
+    color: #eef9ff;
+    background: transparent;
+}
+
+.cerrar-recuperacion {
+    width: 32px;
+    height: 32px;
+    justify-self: end;
+    margin-bottom: -32px;
+    color: #eef9ff;
+    background: transparent;
+    font-size: 24px;
+}

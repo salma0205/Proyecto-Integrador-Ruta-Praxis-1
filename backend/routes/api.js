@@ -12,37 +12,29 @@ const {
     Observation,
     Evaluation,
     PracticeLog,
-    AdminAudit
+    AdminAudit,
+    PasswordRecoveryRequest
 } = require('../models');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { isValidPassword } = require('../utils/password');
 
 const router = express.Router();
 
 router.get('/teacher/students', requireAuth, requireRole('docente'), async (req, res, next) => {
     try {
-        const teacher = await User.findById(req.user.id).select('subjects');
+        const teacher = await User.findById(req.user.id).select('_id');
         if (!teacher) return res.status(404).json({ error: 'No se encontró el usuario docente.' });
-        const subjects = await AcademicSubject.find({
-            active: true,
-            $or: [{ teachers: teacher._id }, { _id: { $in: teacher.subjects } }]
-        }).populate({
+        const subjects = await AcademicSubject.find({ active: true, teachers: teacher._id }).populate({
             path: 'students',
             match: { active: true },
             select: 'firstName middleName lastName secondLastName email studentCode semester'
         });
-        const subjectIds = subjects.map(subject => subject._id);
-        const studentsBySubject = await User.find({
-            role: 'estudiante',
-            active: true,
-            subjects: { $in: subjectIds }
-        }).select('firstName middleName lastName secondLastName email studentCode semester subjects');
         const data = subjects.flatMap(subject => {
             const students = new Map();
             (subject.students || []).forEach(student => students.set(String(student._id), student));
-            studentsBySubject
-                .filter(student => student.subjects.some(subjectId => String(subjectId) === String(subject._id)))
-                .forEach(student => students.set(String(student._id), student));
-            return [...students.values()].map(student => ({
+            return [...students.values()]
+                .filter(student => !subject.semester || Number(student.semester) === Number(subject.semester))
+                .map(student => ({
                 _id: student._id,
                 firstName: student.firstName,
                 middleName: student.middleName || '',
@@ -147,6 +139,162 @@ router.get('/admin/summary', async (req, res, next) => {
     }
 });
 
+router.get('/admin/recovery-requests', async (req, res, next) => {
+    try {
+        const [requests, pendingCount] = await Promise.all([
+            PasswordRecoveryRequest.find()
+                .sort({ createdAt: -1 })
+                .limit(100)
+                .populate('targetUser', 'firstName lastName username email role')
+                .lean(),
+            PasswordRecoveryRequest.countDocuments({ status: 'pendiente' })
+        ]);
+        res.json({ data: requests, pendingCount });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.post('/admin/recovery-requests/:id/reset', async (req, res, next) => {
+    try {
+        const { identifier, password } = req.body || {};
+        const normalizedIdentifier = typeof identifier === 'string' ? identifier.trim().toLowerCase() : '';
+        if (!normalizedIdentifier || normalizedIdentifier.length > 254) {
+            return res.status(400).json({ error: 'Escribe el correo o nombre de usuario exacto de la cuenta verificada.' });
+        }
+        if (!isValidPassword(password)) {
+            return res.status(400).json({ error: 'La contraseña debe tener entre 1 y 10 caracteres.' });
+        }
+
+        const recoveryRequest = await PasswordRecoveryRequest.findById(req.params.id);
+        if (!recoveryRequest) return res.status(404).json({ error: 'No se encontró la solicitud de recuperación.' });
+        if (recoveryRequest.status !== 'pendiente') {
+            return res.status(409).json({ error: 'Esta solicitud ya fue atendida.' });
+        }
+        if (recoveryRequest.requestType === 'usuario') {
+            return res.status(409).json({ error: 'Esta solicitud es solo para recuperar el usuario, no para cambiar la contraseña.' });
+        }
+
+        const user = await User.findOne({
+            $or: [{ username: normalizedIdentifier }, { email: normalizedIdentifier }]
+        });
+        if (!user) return res.status(404).json({ error: 'No se encontró una cuenta con ese correo o nombre de usuario.' });
+        if (!user.active) {
+            return res.status(409).json({ error: 'La cuenta está inactiva. Actívala antes de restablecer el acceso.' });
+        }
+
+        user.passwordHash = await bcrypt.hash(password, 12);
+        await user.save();
+
+        recoveryRequest.status = 'resuelta';
+        recoveryRequest.targetUser = user._id;
+        recoveryRequest.handledBy = req.user._id;
+        recoveryRequest.handledAt = new Date();
+        await recoveryRequest.save();
+        await registrarAuditoria(
+            req,
+            'updated',
+            'passwordRecovery',
+            recoveryRequest,
+            `Restableció el acceso de ${user.username || user.email || user._id}`
+        );
+
+        res.json({
+            data: {
+                ...recoveryRequest.toObject(),
+                targetUser: {
+                    username: user.username || '',
+                    email: user.email || '',
+                    role: user.role
+                }
+            }
+        });
+    } catch (error) {
+        sendDatabaseError(error, next);
+    }
+});
+
+router.post('/admin/recovery-requests/:id/identify-username', async (req, res, next) => {
+    try {
+        const { identifier } = req.body || {};
+        const normalizedIdentifier = typeof identifier === 'string' ? identifier.trim().toLowerCase() : '';
+        if (!normalizedIdentifier || normalizedIdentifier.length > 254) {
+            return res.status(400).json({ error: 'Escribe el correo o nombre de usuario exacto de la cuenta verificada.' });
+        }
+
+        const recoveryRequest = await PasswordRecoveryRequest.findById(req.params.id);
+        if (!recoveryRequest) return res.status(404).json({ error: 'No se encontró la solicitud de recuperación.' });
+        if (recoveryRequest.status !== 'pendiente') {
+            return res.status(409).json({ error: 'Esta solicitud ya fue atendida.' });
+        }
+        if (recoveryRequest.requestType !== 'usuario') {
+            return res.status(409).json({ error: 'Esta acción solo aplica a solicitudes de nombre de usuario.' });
+        }
+
+        const user = await User.findOne({
+            $or: [{ username: normalizedIdentifier }, { email: normalizedIdentifier }]
+        });
+        if (!user) return res.status(404).json({ error: 'No se encontró una cuenta con ese correo o nombre de usuario.' });
+        if (!user.active) {
+            return res.status(409).json({ error: 'La cuenta está inactiva. Actívala antes de resolver la solicitud.' });
+        }
+
+        recoveryRequest.status = 'resuelta';
+        recoveryRequest.targetUser = user._id;
+        recoveryRequest.handledBy = req.user._id;
+        recoveryRequest.handledAt = new Date();
+        await recoveryRequest.save();
+        await registrarAuditoria(
+            req,
+            'updated',
+            'passwordRecovery',
+            recoveryRequest,
+            `Identificó el usuario de una solicitud de ${recoveryRequest.fullName}`
+        );
+
+        res.json({
+            data: {
+                status: recoveryRequest.status,
+                targetUser: {
+                    username: user.username || '',
+                    email: user.email || '',
+                    role: user.role
+                }
+            }
+        });
+    } catch (error) {
+        sendDatabaseError(error, next);
+    }
+});
+
+router.patch('/admin/recovery-requests/:id', async (req, res, next) => {
+    try {
+        if (req.body?.status !== 'descartada') {
+            return res.status(400).json({ error: 'Solo se puede descartar una solicitud pendiente.' });
+        }
+        const recoveryRequest = await PasswordRecoveryRequest.findById(req.params.id);
+        if (!recoveryRequest) return res.status(404).json({ error: 'No se encontró la solicitud de recuperación.' });
+        if (recoveryRequest.status !== 'pendiente') {
+            return res.status(409).json({ error: 'Esta solicitud ya fue atendida.' });
+        }
+
+        recoveryRequest.status = 'descartada';
+        recoveryRequest.handledBy = req.user._id;
+        recoveryRequest.handledAt = new Date();
+        await recoveryRequest.save();
+        await registrarAuditoria(
+            req,
+            'updated',
+            'passwordRecovery',
+            recoveryRequest,
+            `Descartó solicitud de recuperación de ${recoveryRequest.fullName}`
+        );
+        res.json({ data: recoveryRequest });
+    } catch (error) {
+        sendDatabaseError(error, next);
+    }
+});
+
 router.get('/admin/users', async (req, res, next) => {
     try {
         const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
@@ -197,7 +345,7 @@ router.get('/admin/users', async (req, res, next) => {
 });
 
 const resources = {
-    users: { model: User, fields: ['firstName', 'middleName', 'lastName', 'secondLastName', 'email', 'username', 'documentNumber', 'role', 'phone', 'program', 'programId', 'semester', 'subjects', 'active'], populate: ['subjects', 'programId'], references: { programId: AcademicProgram } },
+    users: { model: User, fields: ['firstName', 'middleName', 'lastName', 'secondLastName', 'email', 'username', 'documentNumber', 'role', 'phone', 'program', 'programId', 'semester', 'active'], populate: ['subjects', 'programId'], references: { programId: AcademicProgram } },
     programs: { model: AcademicProgram, fields: ['name', 'director', 'teachers', 'active'], populate: ['director', 'teachers'], references: { director: { model: User, role: 'director' }, teachers: { model: User, role: 'docente' } } },
     subjects: { model: AcademicSubject, fields: ['name', 'code', 'semester', 'teachers', 'students', 'active'], populate: ['teachers', 'students'], references: { teachers: { model: User, role: 'docente' }, students: { model: User, role: 'estudiante' } } },
     institutions: { model: Institution, fields: ['name', 'address', 'semesters', 'practiceName', 'advisorName', 'type', 'agreementActive', 'active', 'contactName', 'contactEmail', 'contactPhone'] },
@@ -205,7 +353,7 @@ const resources = {
     assignments: { model: PracticeAssignment, fields: ['practiceType', 'student', 'teacher', 'accompanimentResponsible', 'institution', 'academicPeriod', 'startDate', 'endDate', 'status', 'description'], populate: ['practiceType', 'student', 'teacher', 'accompanimentResponsible', 'institution', 'approvedBy'], references: { practiceType: PracticeType, student: { model: User, role: 'estudiante' }, teacher: { model: User, role: 'docente' }, accompanimentResponsible: { model: User, role: 'asesor' }, institution: Institution } },
     activities: { model: Activity, fields: ['assignment', 'author', 'title', 'instructions', 'dueDate', 'status', 'resourceUrl'], populate: ['assignment', 'author'], references: { assignment: PracticeAssignment, author: { model: User, role: 'docente' } } },
     submissions: { model: Submission, fields: ['activity', 'assignment', 'student', 'response', 'evidence', 'submittedAt', 'status'], populate: ['activity', 'assignment', 'student'], references: { activity: Activity, assignment: PracticeAssignment, student: { model: User, role: 'estudiante' } } },
-    observations: { model: Observation, fields: ['assignment', 'student', 'author', 'category', 'body', 'observedAt', 'visibleToStudent'], populate: ['assignment', 'student', 'author'], references: { assignment: PracticeAssignment, student: { model: User, role: 'estudiante' }, author: { model: User, role: 'asesor' } } },
+    observations: { model: Observation, fields: ['assignment', 'student', 'author', 'category', 'body', 'observedAt', 'visibleToStudent'], populate: ['assignment', 'student', 'author'], references: { assignment: PracticeAssignment, student: { model: User, role: 'estudiante' }, author: { model: User, roles: ['asesor', 'docente'] } } },
     evaluations: { model: Evaluation, fields: ['assignment', 'student', 'evaluator', 'activity', 'submission', 'score', 'feedback', 'evaluatedAt'], populate: ['assignment', 'student', 'evaluator', 'activity', 'submission'], references: { assignment: PracticeAssignment, student: { model: User, role: 'estudiante' }, evaluator: { model: User, role: 'docente' }, activity: Activity, submission: Submission } },
     practiceLogs: { model: PracticeLog, fields: ['assignment', 'student', 'date', 'hours', 'activityDescription', 'status', 'reviewedBy', 'reviewComment'], populate: ['assignment', 'student', 'reviewedBy'], references: { assignment: PracticeAssignment, student: { model: User, role: 'estudiante' }, reviewedBy: { model: User, roles: ['asesor', 'docente', 'director', 'administrador'] } } }
 };
@@ -264,35 +412,14 @@ async function validateUserProgram(data, requireActive = true) {
     }
 }
 
-async function validateUserSubjects(data, requireActive = true) {
-    if (data.role && data.role !== 'administrador' &&
-        (!Array.isArray(data.subjects) || data.subjects.length === 0)) {
-        const error = new Error('Selecciona al menos una asignatura para el usuario.');
+async function validateSubjectStudentSemesters(data) {
+    if (data.semester === undefined || !Array.isArray(data.students) || !data.students.length) return;
+    const semester = Number(data.semester);
+    const students = await User.find({ _id: { $in: data.students }, role: 'estudiante' }).select('semester');
+    if (students.some(student => Number(student.semester) !== semester)) {
+        const error = new Error('Solo puedes asignar estudiantes del mismo semestre que la asignatura.');
         error.status = 400;
         throw error;
-    }
-    if (data.subjects !== undefined) {
-        if (!Array.isArray(data.subjects) || data.subjects.length === 0) {
-            const error = new Error('Selecciona al menos una asignatura para el usuario.');
-            error.status = 400;
-            throw error;
-        }
-        const uniqueIds = [...new Set(data.subjects.map(String))];
-        if (uniqueIds.length !== data.subjects.length) {
-            const error = new Error('No repitas asignaturas en la selección.');
-            error.status = 400;
-            throw error;
-        }
-        const validSubjects = await AcademicSubject.countDocuments({
-            _id: { $in: uniqueIds },
-            ...(requireActive ? { active: true } : {})
-        });
-        if (validSubjects !== uniqueIds.length) {
-            const error = new Error('Una o más asignaturas ya no están disponibles. Actualiza la selección.');
-            error.status = 400;
-            throw error;
-        }
-        data.subjects = uniqueIds;
     }
 }
 
@@ -314,16 +441,8 @@ async function syncUserSubjectAssignments(userId, role, subjects, previous = {})
     const previousField = subjectFields[previous.role];
     const currentField = subjectFields[role];
     const oldSubjects = (previous.subjects || []).map(String);
-    const newSubjects = (subjects || []).map(String);
-
-    if (previousField) {
-        const removed = oldSubjects.filter(subjectId => previousField !== currentField || !newSubjects.includes(subjectId));
-        if (removed.length) {
-            await AcademicSubject.updateMany({ _id: { $in: removed } }, { $pull: { [previousField]: userId } });
-        }
-    }
-    if (currentField && newSubjects.length) {
-        await AcademicSubject.updateMany({ _id: { $in: newSubjects } }, { $addToSet: { [currentField]: userId } });
+    if (previousField && previousField !== currentField && oldSubjects.length) {
+        await AcademicSubject.updateMany({ _id: { $in: oldSubjects } }, { $pull: { [previousField]: userId } });
     }
 }
 
@@ -370,8 +489,8 @@ for (const [path, resource] of Object.entries(resources)) {
         try {
             const data = pickAllowedFields(req.body, fields);
             if (path === 'users') {
-                if (typeof req.body.password !== 'string' || req.body.password.length < 8) {
-                    return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
+                if (!isValidPassword(req.body.password)) {
+                    return res.status(400).json({ error: 'La contraseña debe tener entre 1 y 10 caracteres.' });
                 }
                 if (data.role === 'administrador') {
                     if (!/^[a-z0-9._-]{3,40}$/i.test(data.username || '')) {
@@ -384,9 +503,9 @@ for (const [path, resource] of Object.entries(resources)) {
                 data.studentCode = await generateUserCode();
                 data.passwordHash = await bcrypt.hash(req.body.password, 12);
                 await validateUserProgram(data);
-                await validateUserSubjects(data);
             }
             await validateReferences(data, resource.references);
+            if (path === 'subjects') await validateSubjectStudentSemesters(data);
             const document = await model.create(data);
             if (path === 'users') {
                 await syncUserSubjectAssignments(document._id, document.role, document.subjects);
@@ -435,11 +554,10 @@ for (const [path, resource] of Object.entries(resources)) {
             }
             if (path === 'users') {
                 await validateUserProgram(changes, false);
-                await validateUserSubjects(changes, false);
             }
             if (path === 'users' && req.body.password) {
-                if (typeof req.body.password !== 'string' || req.body.password.length < 8) {
-                    return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
+                if (!isValidPassword(req.body.password)) {
+                    return res.status(400).json({ error: 'La contraseña debe tener entre 1 y 10 caracteres.' });
                 }
                 changes.passwordHash = await bcrypt.hash(req.body.password, 12);
             }
@@ -453,6 +571,9 @@ for (const [path, resource] of Object.entries(resources)) {
             }
             const currentDocument = await model.findById(req.params.id);
             if (!currentDocument) return res.status(404).json({ error: 'Registro no encontrado.' });
+            if (path === 'subjects' && (changes.semester !== undefined || changes.students !== undefined)) {
+                await validateSubjectStudentSemesters({ ...currentDocument.toObject(), ...changes });
+            }
             const beforeActive = currentDocument.active;
             await validateReferences(changes, resource.references);
             const document = await model.findByIdAndUpdate(req.params.id, changes, {

@@ -90,7 +90,7 @@
     function overview() {
         const metrics = dashboard.metrics;
         const rows = listRows(dashboard.assignments, item => `<tr><td>${escapeHtml(assignmentName(item))}</td><td>${escapeHtml(assignmentStudent(item))}</td><td>${escapeHtml(item.institution?.name || '—')}</td><td>${statusPill(status(item))}</td></tr>`).slice(0, 12);
-        const content = `
+        let content = `
             <div class="rp-metrics">
                 ${value(role === 'estudiante' ? 'Mis prácticas' : 'Prácticas relacionadas', metrics.assignments)}
                 ${value('En curso', metrics.activeAssignments)}
@@ -102,6 +102,16 @@
             </div>
             ${table(['Práctica', 'Estudiante', 'Institución', 'Estado'], rows, 'No hay registros académicos asociados a tu cuenta.')}
         `;
+        const subjectRows = listRows(dashboard.subjects || [], subject => {
+            const people = role === 'docente'
+                ? (subject.students || []).map(personName).join(', ') || 'Sin estudiantes asignados'
+                : (subject.teachers || []).map(personName).join(', ') || 'Sin docente asignado';
+            return `<tr><td>${escapeHtml(subject.name)}</td><td>${escapeHtml(subject.code || '-')}</td><td>${escapeHtml(subject.semester || '-')}</td><td>${escapeHtml(people)}</td></tr>`;
+        });
+        const subjectsPanel = ['docente', 'estudiante'].includes(role)
+            ? `<h3 class="rp-section-title">Mis asignaturas</h3>${table(['Asignatura', 'Codigo', 'Semestre', role === 'docente' ? 'Estudiantes asignados' : 'Docente'], subjectRows, 'No tienes asignaturas asignadas.')}`
+            : '';
+        content += subjectsPanel;
         if (role === 'estudiante') {
             const wrapper = document.getElementById('inicio');
             let overviewPanel = wrapper.querySelector('.rp-student-overview');
@@ -121,10 +131,17 @@
             const rows = listRows(dashboard.assignments, item => `<tr><td>${escapeHtml(assignmentName(item))}</td><td>${escapeHtml(item.institution?.name || '—')}</td><td>${escapeHtml(dateText(item.startDate))} – ${escapeHtml(dateText(item.endDate))}</td><td>${statusPill(item.approvalStatus)}</td><td>${escapeHtml(item.approvalComment || '—')}</td></tr>`);
             pageContent(id, titles[id], table(['Práctica', 'Institución', 'Fechas', 'Aprobación', 'Observación'], rows, 'Aún no tienes prácticas asignadas.'));
         } else if (id === 'mis-actividades') {
-            const options = dashboard.activities.map(item => `<option value="${item._id}" data-assignment="${item.assignment?._id || ''}">${escapeHtml(item.title)} · ${escapeHtml(assignmentName(dashboard.assignments.find(a => a._id === item.assignment?._id)))}</option>`).join('');
-            const cards = listRows(dashboard.activities, item => `<article class="rp-card"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.instructions)}</p><small>Fecha límite: ${escapeHtml(dateText(item.dueDate))} · ${escapeHtml(item.status)}</small></article>`);
-            const fields = `<label>Actividad<select name="activity" required><option value="">Selecciona una actividad</option>${options}</select></label><label>Respuesta / bitácora<textarea name="response" maxlength="10000" rows="4"></textarea></label><label>Nombre de evidencia<input name="evidenceName" maxlength="255" placeholder="Ej. Planeación de clase"></label><label>Enlace de evidencia (HTTP/HTTPS)<input name="evidenceUrl" type="url" placeholder="https://..." required></label>`;
-            pageContent(id, titles[id], `${cards || '<p class="rp-empty">No tienes actividades publicadas todavía.</p>'}${form('submission', 'Enviar actividad o evidencia', fields, 'Enviar para revisión')}`);
+            const groups = new Map();
+            dashboard.activities.forEach(item => {
+                const subjectName = item.subject?.name || assignmentName(dashboard.assignments.find(a => a._id === item.assignment?._id));
+                if (!groups.has(subjectName)) groups.set(subjectName, []);
+                groups.get(subjectName).push(item);
+            });
+            const cards = [...groups.entries()].map(([subjectName, activities]) => `<section class="rp-subject-activities"><h3 class="rp-section-title">${escapeHtml(subjectName)}</h3>${listRows(activities, item => {
+                const fields = `<input type="hidden" name="activity" value="${item._id}"><label>Respuesta / bitácora<textarea name="response" maxlength="10000" rows="4"></textarea></label><label>Nombre de evidencia<input name="evidenceName" maxlength="255" placeholder="Ej. Planeación de clase"></label><label>Enlace de evidencia (HTTP/HTTPS)<input name="evidenceUrl" type="url" placeholder="https://..."></label>`;
+                return `<article class="rp-card"><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.instructions)}</p><small>Fecha límite: ${escapeHtml(dateText(item.dueDate))} · ${escapeHtml(item.status)}</small>${form('submission', 'Enviar actividad o evidencia', fields, 'Enviar para revisión')}</article>`;
+            })}</section>`).join('');
+            pageContent(id, titles[id], cards || '<p class="rp-empty">No tienes actividades publicadas todavía.</p>');
         } else if (id === 'evidencias') {
             const rows = listRows(dashboard.submissions, item => `<tr><td>${escapeHtml(item.activity?.title)}</td><td>${escapeHtml(item.response || item.evidence?.map(file => file.name).join(', ') || '—')}</td><td>${statusPill(item.status)}</td><td>${escapeHtml(item.feedback || 'Sin retroalimentación')}</td><td>${escapeHtml(dateText(item.submittedAt))}</td></tr>`);
             pageContent(id, titles[id], table(['Actividad', 'Entrega', 'Estado', 'Comentario docente', 'Fecha'], rows, 'Todavía no has enviado entregas.'));
@@ -144,13 +161,13 @@
 
     function renderTeacher(id) {
         if (id === 'estudiantes') {
-            const unique = new Map();
-            dashboard.assignments.forEach(item => unique.set(item.student?._id, item.student));
-            const rows = [...unique.values()].filter(Boolean).map(student => `<tr><td>${escapeHtml(personName(student))}</td><td>${escapeHtml(student.email || '—')}</td><td>${escapeHtml(student.studentCode || '—')}</td><td>${escapeHtml(student.programId?.name || 'Asignado')}</td></tr>`).join('');
-            pageContent(id, titles[id], table(['Estudiante', 'Correo', 'Código', 'Programa'], rows, 'No hay estudiantes asignados a tus prácticas.'));
+            const rows = listRows(dashboard.subjects || [], subject => (subject.students || []).map(student => `<tr><td>${escapeHtml(personName(student))}</td><td>${escapeHtml(student.email || '-')}</td><td>${escapeHtml(student.studentCode || '-')}</td><td>${escapeHtml(subject.name)}</td><td>${escapeHtml(subject.semester || '-')}</td></tr>`).join(''));
+            pageContent(id, titles[id], table(['Estudiante', 'Correo', 'Codigo', 'Asignatura', 'Semestre'], rows, 'No hay estudiantes asignados a tus asignaturas.'));
         } else if (id === 'actividades') {
-            const fields = `${selectAssignments()}<label>Título<input name="title" maxlength="180" required></label><label>Instrucciones<textarea name="instructions" maxlength="5000" required></textarea></label><label>Fecha límite<input name="dueDate" type="date"></label><label>Enlace de apoyo<input name="resourceUrl" type="url"></label>`;
-            const cards = listRows(dashboard.activities, item => `<article class="rp-card"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.instructions)}</p><small>${escapeHtml(dateText(item.dueDate))} · ${escapeHtml(item.status)}</small></article>`);
+            const subjects = dashboard.subjects || [];
+            const subjectSelect = `<label>Asignatura<select name="subject" required><option value="">Selecciona una asignatura</option>${subjects.map(subject => `<option value="${subject._id}">${escapeHtml(`${subject.name} · Semestre ${subject.semester || '-'}`)}</option>`).join('')}</select></label>`;
+            const fields = `${subjectSelect}<label>Título<input name="title" maxlength="180" required></label><label>Instrucciones<textarea name="instructions" maxlength="5000" required></textarea></label><label>Fecha límite<input name="dueDate" type="date"></label><label>Enlace de apoyo<input name="resourceUrl" type="url"></label>`;
+            const cards = listRows(dashboard.activities, item => `<article class="rp-card"><small>${escapeHtml(item.subject?.name || 'Práctica')}</small><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.instructions)}</p><small>${escapeHtml(dateText(item.dueDate))} · ${escapeHtml(item.status)}</small></article>`);
             pageContent(id, titles[id], `${form('activity', 'Publicar actividad', fields, 'Publicar actividad')}${cards || '<p class="rp-empty">Aún no hay actividades publicadas.</p>'}`);
         } else if (id === 'entregas' || id === 'evidencias') {
             const rows = listRows(dashboard.submissions, item => `<tr><td>${escapeHtml(personName(item.student))}</td><td>${escapeHtml(item.activity?.title || 'Actividad')}</td><td>${escapeHtml(item.response || item.evidence?.map(file => file.name).join(', ') || '—')}</td><td>${statusPill(item.status)}</td><td><form class="rp-review" data-submission="${item._id}"><select name="status"><option value="aprobada">Aprobar</option><option value="requiere_cambios">Solicitar cambios</option></select><input name="feedback" maxlength="5000" placeholder="Retroalimentación" required><button>Guardar revisión</button></form></td></tr>`);
@@ -229,7 +246,10 @@
 
     function navigate(id) {
         if (role === 'estudiante') {
+            document.querySelector('#inicio > .mensaje-inicio')?.setAttribute('hidden', '');
+            document.querySelector('#inicio > .rp-student-overview')?.setAttribute('hidden', '');
             document.querySelectorAll('#inicio > section[id]').forEach(section => section.classList.toggle('activa', section.id === id));
+            document.querySelector('#inicio > .rp-student-overview')?.toggleAttribute('hidden', id !== 'inicio');
             document.getElementById('mi-perfil')?.classList.toggle('activa', id === 'mi-perfil');
             document.getElementById('inicio')?.classList.add('activa');
             if (id === 'inicio') document.getElementById('inicio')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -241,6 +261,82 @@
         document.querySelector('.menu-lateral-asesor, .barra-lateral')?.classList.remove('abierto', 'abierta');
     }
     const currentView = () => document.querySelector('main section.rp-page.activa')?.id || 'inicio';
+
+    let studentNotifications = [];
+    let notificationPanel = null;
+    function renderStudentNotifications(data) {
+        studentNotifications = data.notifications || [];
+        const badge = document.querySelector('.contador-notificaciones');
+        if (badge) {
+            badge.textContent = data.unreadCount > 99 ? '99+' : String(data.unreadCount || 0);
+            badge.hidden = !data.unreadCount;
+        }
+        if (!notificationPanel || notificationPanel.hidden) return;
+        const rows = studentNotifications.map(item => {
+            const actor = item.actor ? personName(item.actor) : 'Ruta Praxis';
+            const date = item.createdAt ? new Date(item.createdAt).toLocaleString('es-CO') : '';
+            return `<button type="button" class="rp-notification-item${item.readAt ? ' leida' : ''}" data-student-notification="${escapeHtml(item._id)}" data-view="${escapeHtml(item.view)}"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.message)}</span><small>${escapeHtml(actor)} · ${escapeHtml(date)}</small></button>`;
+        }).join('');
+        notificationPanel.innerHTML = `<header><strong>Notificaciones</strong><button type="button" class="rp-notification-read-all" ${data.unreadCount ? '' : 'disabled'}>Marcar todas como leídas</button></header><div class="rp-notification-list">${rows || '<p class="rp-empty">No tienes notificaciones todavía.</p>'}</div>`;
+    }
+
+    async function refreshStudentNotifications() {
+        if (role !== 'estudiante') return;
+        try {
+            const result = await api('/api/workflow/notifications');
+            renderStudentNotifications(result.data);
+        } catch (error) {
+            console.error('No se pudieron cargar las notificaciones:', error);
+        }
+    }
+
+    if (role === 'estudiante') {
+        const bell = document.querySelector('.boton-notificaciones');
+        const header = document.querySelector('.barra-superior-estudiante');
+        if (header && bell) {
+            header.classList.add('rp-notification-anchor');
+            notificationPanel = document.createElement('aside');
+            notificationPanel.className = 'rp-notification-panel';
+            notificationPanel.hidden = true;
+            notificationPanel.setAttribute('aria-label', 'Notificaciones del estudiante');
+            bell.insertAdjacentElement('afterend', notificationPanel);
+            bell.setAttribute('aria-expanded', 'false');
+            bell.addEventListener('click', () => {
+                notificationPanel.hidden = !notificationPanel.hidden;
+                bell.setAttribute('aria-expanded', String(!notificationPanel.hidden));
+                if (!notificationPanel.hidden) refreshStudentNotifications();
+            });
+            notificationPanel.addEventListener('click', async event => {
+                if (event.target.closest('.rp-notification-read-all')) {
+                    try {
+                        await api('/api/workflow/notifications/read-all', { method: 'PATCH' });
+                        await refreshStudentNotifications();
+                    } catch (error) { notify(error.message); }
+                    return;
+                }
+                const item = event.target.closest('[data-student-notification]');
+                if (!item) return;
+                const notification = studentNotifications.find(entry => entry._id === item.dataset.studentNotification);
+                try {
+                    await api(`/api/workflow/notifications/${encodeURIComponent(item.dataset.studentNotification)}/read`, { method: 'PATCH' });
+                    await refreshStudentNotifications();
+                    notificationPanel.hidden = true;
+                    bell.setAttribute('aria-expanded', 'false');
+                    const allowedViews = ['inicio', 'mi-practica', 'mis-actividades', 'evidencias', 'retroalimentaciones', 'informacion-proceso', 'evaluaciones'];
+                    const destination = allowedViews.includes(notification?.view) ? notification.view : 'inicio';
+                    if (document.getElementById(destination)) navigate(destination);
+                } catch (error) { notify(error.message); }
+            });
+            document.addEventListener('click', event => {
+                if (!notificationPanel.hidden && !event.target.closest('.rp-notification-panel, .boton-notificaciones')) {
+                    notificationPanel.hidden = true;
+                    bell.setAttribute('aria-expanded', 'false');
+                }
+            });
+            refreshStudentNotifications();
+            window.setInterval(refreshStudentNotifications, 25000);
+        }
+    }
 
     document.addEventListener('click', event => {
         const button = event.target.closest('[data-vista]');

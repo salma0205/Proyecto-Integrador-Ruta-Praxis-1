@@ -14,6 +14,8 @@ let paginaUsuarios = 1;
 const tamanoPaginaUsuarios = 10;
 let consultaUsuariosActiva = 0;
 let temporizadorBusquedaUsuarios;
+let solicitudesRecuperacion = [];
+let contadorSolicitudesAnterior = null;
 
 const rolesUsuario = {
     administrador: 'Administrador',
@@ -125,7 +127,7 @@ async function cargarUsuariosDesdeApi() {
     llenarDirectores(campo('programa-director')?.value || '');
     llenarUsuariosPorRol('programa-docentes', 'Docente', valoresSeleccionados(campo('programa-docentes')));
     llenarUsuariosPorRol('campo-docentes-asignatura', 'Docente', valoresSeleccionados(campo('campo-docentes-asignatura')));
-    llenarUsuariosPorRol('campo-estudiantes-asignatura', 'Estudiante', valoresSeleccionados(campo('campo-estudiantes-asignatura')));
+    llenarUsuariosPorRol('campo-estudiantes-asignatura', 'Estudiante', valoresSeleccionados(campo('campo-estudiantes-asignatura')), campo('campo-semestre')?.value);
 }
 
 function avisoAdmin(mensaje, esError = false) {
@@ -137,10 +139,70 @@ function avisoAdmin(mensaje, esError = false) {
     temporizadorAdmin = setTimeout(() => notificacionAdmin.classList.remove('visible'), 3200);
 }
 
-document.querySelector('.boton-notificaciones')?.addEventListener('click', () => {
-    avisoAdmin('Todavia no tienes notificaciones nuevas.');
+function actualizarContadorSolicitudes(cantidad) {
+    const contador = document.querySelector('.contador-notificaciones');
+    if (!contador) return;
+    contador.textContent = String(cantidad);
+    contador.hidden = cantidad < 1;
+}
+
+function renderSolicitudesRecuperacion() {
+    const lista = campo('lista-notificaciones-admin');
+    if (!lista) return;
+    const pendientes = solicitudesRecuperacion.filter(solicitud => solicitud.status === 'pendiente');
+    if (!pendientes.length) {
+        lista.innerHTML = '<p class="vacio-notificaciones-admin">No tienes notificaciones nuevas.</p>';
+        return;
+    }
+    const tipos = { usuario: 'Olvidó usuario', contrasena: 'Olvidó contraseña', ambos: 'Olvidó usuario y contraseña' };
+    lista.innerHTML = pendientes.map(solicitud => {
+        const fecha = new Date(solicitud.createdAt);
+        const fechaTexto = Number.isNaN(fecha.getTime()) ? '—' : fecha.toLocaleString('es-CO');
+        const accion = solicitud.requestType === 'usuario'
+            ? `<button class="boton-principal" type="button" data-notification-action data-identificar-solicitud="${escaparHtml(solicitud._id)}">Identificar usuario</button>`
+            : `<button class="boton-principal" type="button" data-notification-action data-restablecer-solicitud="${escaparHtml(solicitud._id)}">Restablecer contraseña</button>`;
+        return `<article class="notificacion-solicitud-admin"><div class="notificacion-solicitud-icono"><i class="fa-solid fa-key"></i></div><div class="notificacion-solicitud-contenido"><strong>${escaparHtml(solicitud.fullName)}</strong><p>${escaparHtml(tipos[solicitud.requestType] || 'Solicitud de acceso')}</p><small>${escaparHtml(solicitud.contactEmail)} · ${escaparHtml(fechaTexto)}</small><div class="acciones-solicitud">${accion}<button class="boton-secundario-admin" type="button" data-notification-action data-descartar-solicitud="${escaparHtml(solicitud._id)}">Descartar</button></div></div></article>`;
+    }).join('');
+}
+async function cargarSolicitudesRecuperacion() {
+    const result = await solicitarApi('/api/admin/recovery-requests');
+    const cantidadAnterior = contadorSolicitudesAnterior;
+    solicitudesRecuperacion = result.data;
+    actualizarContadorSolicitudes(result.pendingCount);
+    renderSolicitudesRecuperacion();
+    if (cantidadAnterior !== null && result.pendingCount > cantidadAnterior) {
+        const nuevas = result.pendingCount - cantidadAnterior;
+        avisoAdmin(nuevas === 1
+            ? 'Llegó una nueva solicitud de acceso.'
+            : `Llegaron ${nuevas} nuevas solicitudes de acceso.`);
+    }
+    contadorSolicitudesAnterior = result.pendingCount;
+    return result.pendingCount;
+}
+
+const botonNotificacionesAdmin = document.querySelector('.boton-notificaciones');
+const panelNotificacionesAdmin = campo('panel-notificaciones-admin');
+
+function cerrarPanelNotificacionesAdmin() {
+    panelNotificacionesAdmin.hidden = true;
+    botonNotificacionesAdmin?.setAttribute('aria-expanded', 'false');
+}
+
+botonNotificacionesAdmin?.addEventListener('click', async () => {
+    if (!panelNotificacionesAdmin.hidden) {
+        cerrarPanelNotificacionesAdmin();
+        return;
+    }
+    panelNotificacionesAdmin.hidden = false;
+    botonNotificacionesAdmin.setAttribute('aria-expanded', 'true');
+    try {
+        await cargarSolicitudesRecuperacion();
+    } catch (error) {
+        avisoAdmin(error.message, true);
+    }
 });
 
+panelNotificacionesAdmin?.querySelector('.cerrar-notificaciones-admin')?.addEventListener('click', cerrarPanelNotificacionesAdmin);
 function abrirVistaAdmin(id) {
     vistasAdmin.forEach(vista => vista.classList.toggle('activa', vista.id === id));
     document.querySelectorAll('.opcion-menu').forEach(opcion => opcion.classList.toggle('activa', opcion.dataset.vista === id));
@@ -159,9 +221,9 @@ function campo(id) {
 function configurarGrupo(id, visible, requerido = false) {
     const grupo = campo(id);
     const control = grupo?.querySelector('input, select');
-    if (!grupo || !control) return;
+    if (!grupo) return;
     grupo.hidden = !visible;
-    control.required = visible && requerido;
+    if (control) control.required = visible && requerido;
 }
 
 function actualizarOpcionesEstado(opciones, seleccionado) {
@@ -218,7 +280,6 @@ async function cargarAsignaturasDesdeApi() {
         students: asignatura.students || [],
         estado: asignatura.active ? 'Activa' : 'Inactiva'
     })).join('') || '<p class="vacio-admin">Aun no hay asignaturas registradas.</p>';
-    llenarAsignaturas(Array.from(campo('usuario-asignaturas')?.selectedOptions || []).map(option => option.value));
     actualizarResumenAdministrador();
 }
 
@@ -314,13 +375,37 @@ function llenarDirectores(seleccionado = '') {
         .forEach(usuario => selector.add(new Option(usuario.nombre, usuario.id, false, String(usuario.id) === String(seleccionado))));
 }
 
-function llenarUsuariosPorRol(selectorId, rol, seleccionados = []) {
+function llenarUsuariosPorRol(selectorId, rol, seleccionados = [], semestreAsignatura = '') {
     const selector = campo(selectorId);
     if (!selector) return;
     const ids = new Set((Array.isArray(seleccionados) ? seleccionados : [seleccionados]).map(String).filter(Boolean));
-    const opciones = estadoAdmin.usuarios
-        .filter(usuario => usuario.rol === rol && (usuario.activo !== false || ids.has(String(usuario.id))))
-        .map(usuario => new Option(usuario.nombre, usuario.id, false, ids.has(String(usuario.id))));
+    const usuarios = estadoAdmin.usuarios
+        .filter(usuario => usuario.rol === rol && (usuario.activo !== false || ids.has(String(usuario.id))) &&
+            (rol !== 'Estudiante' || !semestreAsignatura || String(usuario.semestre?.[0] || '') === String(semestreAsignatura)));
+    if (selector.matches('.lista-seleccion-asignatura')) {
+        if (!usuarios.length) {
+            const empty = document.createElement('p');
+            empty.className = 'sin-usuarios-asignatura';
+            empty.textContent = rol === 'Estudiante' && semestreAsignatura
+                ? `No hay estudiantes activos del semestre ${semestreAsignatura}.`
+                : `No hay usuarios activos con rol ${rol}.`;
+            selector.replaceChildren(empty);
+            return;
+        }
+        selector.replaceChildren(...usuarios.map(usuario => {
+            const etiqueta = document.createElement('label');
+            const checkbox = document.createElement('input');
+            const nombre = document.createElement('span');
+            checkbox.type = 'checkbox';
+            checkbox.value = usuario.id;
+            checkbox.checked = ids.has(String(usuario.id));
+            nombre.textContent = usuario.nombre;
+            etiqueta.append(checkbox, nombre);
+            return etiqueta;
+        }));
+        return;
+    }
+    const opciones = usuarios.map(usuario => new Option(usuario.nombre, usuario.id, false, ids.has(String(usuario.id))));
     if (!opciones.length) {
         const empty = new Option(`Primero crea usuarios con rol ${rol}`, '');
         empty.disabled = true;
@@ -330,15 +415,6 @@ function llenarUsuariosPorRol(selectorId, rol, seleccionados = []) {
     selector.replaceChildren(...opciones);
 }
 
-function llenarAsignaturas(seleccionadas = []) {
-    const selector = campo('usuario-asignaturas');
-    const ids = new Set((Array.isArray(seleccionadas) ? seleccionadas : [seleccionadas]).map(value =>
-        typeof value === 'object' ? String(value.id || value._id) : String(value)
-    ));
-    selector.replaceChildren(...obtenerAsignaturasRegistradas().map(asignatura =>
-        new Option(asignatura.name, asignatura._id, false, ids.has(String(asignatura._id)))
-    ));
-}
 
 function obtenerAsesoresRegistrados() {
     return estadoAdmin.usuarios
@@ -386,6 +462,9 @@ function generarCodigoAsignatura() {
 }
 
 function valoresSeleccionados(selector) {
+    if (selector.matches('.lista-seleccion-asignatura')) {
+        return Array.from(selector.querySelectorAll('input[type="checkbox"]:checked'), checkbox => checkbox.value);
+    }
     return Array.from(selector.selectedOptions).map(opcion => opcion.value);
 }
 
@@ -728,6 +807,15 @@ const modalInstitucion = document.getElementById('modal-institucion');
 const modalPractica = document.getElementById('modal-practica');
 const modalPrograma = document.getElementById('modal-programa');
 
+campo('campo-semestre').addEventListener('change', () => {
+    const seleccionados = valoresSeleccionados(campo('campo-estudiantes-asignatura'));
+    const semestre = campo('campo-semestre').value;
+    campo('ayuda-estudiantes-asignatura').textContent = semestre
+        ? `Solo se muestran estudiantes del semestre ${semestre}.`
+        : 'Elige el semestre para filtrar los estudiantes que puedes asignar.';
+    llenarUsuariosPorRol('campo-estudiantes-asignatura', 'Estudiante', seleccionados, semestre);
+});
+
 function configurarSemestrePorRol() {
     const rol = campo('usuario-rol').value;
     const seleccionados = semestresSeleccionados();
@@ -746,11 +834,8 @@ function configurarIdentificadorUsuario() {
     campo('etiqueta-usuario-nombre').hidden = !esAdministrador;
     campo('grupo-semestre-usuario').hidden = esAdministrador;
     campo('grupo-programa-usuario').hidden = esAdministrador;
-    campo('grupo-asignaturas-usuario').hidden = esAdministrador;
     campo('usuario-programa').required = !esAdministrador;
     campo('usuario-programa').disabled = esAdministrador;
-    campo('usuario-asignaturas').required = !esAdministrador;
-    campo('usuario-asignaturas').disabled = esAdministrador;
 }
 
 function abrirModalUsuario(usuario = null) {
@@ -770,7 +855,6 @@ function abrirModalUsuario(usuario = null) {
     campo('usuario-codigo').value = usuario?.codigo || '';
     campo('usuario-rol').value = usuario?.rol || '';
     llenarProgramas(usuario?.programId || '');
-    llenarAsignaturas(usuario?.asignaturas || []);
     llenarInstituciones(usuario?.institucion || '', 'usuario-institucion');
     seleccionarSemestres(usuario?.semestre || []);
     campo('usuario-estado').value = usuario ? (usuario.activo ? 'Activo' : 'Inactivo') : '';
@@ -853,6 +937,10 @@ function abrirModal(tipo, usuario, elemento = null) {
     campo('campo-nombre').value = datos.nombre || '';
     campo('campo-codigo').value = datos.codigo || (tipo === 'asignatura' ? generarCodigoAsignatura() : '');
     campo('campo-semestre').value = datos.semestre || '';
+    const semestreSeleccionado = campo('campo-semestre').value;
+    campo('ayuda-estudiantes-asignatura').textContent = semestreSeleccionado
+        ? `Solo se muestran estudiantes del semestre ${semestreSeleccionado}.`
+        : 'Elige el semestre para filtrar los estudiantes que puedes asignar.';
 
     configurarGrupo('grupo-nombre', true, true);
     configurarGrupo('grupo-codigo', false);
@@ -863,7 +951,7 @@ function abrirModal(tipo, usuario, elemento = null) {
 
     if (tipo === 'asignatura') {
         llenarUsuariosPorRol('campo-docentes-asignatura', 'Docente', datos.teachers || []);
-        llenarUsuariosPorRol('campo-estudiantes-asignatura', 'Estudiante', datos.students || []);
+        llenarUsuariosPorRol('campo-estudiantes-asignatura', 'Estudiante', datos.students || [], datos.semestre || '');
         actualizarOpcionesEstado(['Activa', 'Inactiva'], datos.estado || 'Activa');
     }
 
@@ -887,6 +975,125 @@ function actualizarElementoEditado(registro) {
 }
 
 accesosAdmin.forEach(acceso => acceso.addEventListener('click', () => abrirVistaAdmin(acceso.dataset.vista)));
+const modalRestablecerRecuperacion = campo('modal-restablecer-recuperacion');
+const formularioRestablecerRecuperacion = campo('form-restablecer-recuperacion');
+const modalIdentificarUsuario = campo('modal-identificar-usuario');
+const formularioIdentificarUsuario = campo('form-identificar-usuario');
+
+campo('lista-notificaciones-admin')?.addEventListener('click', async evento => {
+    const botonRestablecer = evento.target.closest('[data-restablecer-solicitud]');
+    const botonIdentificar = evento.target.closest('[data-identificar-solicitud]');
+    const botonDescartar = evento.target.closest('[data-descartar-solicitud]');
+    if (botonRestablecer) {
+        const solicitud = solicitudesRecuperacion.find(item => item._id === botonRestablecer.dataset.restablecerSolicitud);
+        if (!solicitud) return;
+        formularioRestablecerRecuperacion.dataset.solicitudId = solicitud._id;
+        campo('cuenta-restablecer-recuperacion').value = solicitud.accountIdentifier || solicitud.contactEmail || '';
+        campo('nueva-contrasena-recuperacion').value = '';
+        campo('confirmar-contrasena-recuperacion').value = '';
+        campo('resumen-solicitud-recuperacion').textContent =
+            `${solicitud.fullName} · ${solicitud.contactEmail}. Verifica su identidad antes de continuar.`;
+        cerrarPanelNotificacionesAdmin();
+        modalRestablecerRecuperacion.showModal();
+        return;
+    }
+
+    if (botonIdentificar) {
+        const solicitud = solicitudesRecuperacion.find(item => item._id === botonIdentificar.dataset.identificarSolicitud);
+        if (!solicitud) return;
+        formularioIdentificarUsuario.dataset.solicitudId = solicitud._id;
+        campo('cuenta-identificar-usuario').value = solicitud.accountIdentifier || solicitud.contactEmail || '';
+        campo('resumen-identificar-usuario').textContent =
+            `${solicitud.fullName} · ${solicitud.contactEmail}. Verifica su identidad antes de continuar.`;
+        cerrarPanelNotificacionesAdmin();
+        modalIdentificarUsuario.showModal();
+        return;
+    }
+
+    if (botonDescartar) {
+        if (!window.confirm('¿Descartar esta solicitud de recuperación?')) return;
+        botonDescartar.disabled = true;
+        try {
+            await solicitarApi(`/api/admin/recovery-requests/${botonDescartar.dataset.descartarSolicitud}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ status: 'descartada' })
+            });
+            await cargarSolicitudesRecuperacion();
+            avisoAdmin('Solicitud descartada.');
+        } catch (error) {
+            avisoAdmin(error.message, true);
+        } finally {
+            botonDescartar.disabled = false;
+        }
+    }
+});
+
+document.querySelectorAll('[data-cerrar-restablecer]').forEach(boton => {
+    boton.addEventListener('click', () => modalRestablecerRecuperacion.close());
+});
+
+document.querySelectorAll('[data-cerrar-identificar]').forEach(boton => {
+    boton.addEventListener('click', () => modalIdentificarUsuario.close());
+});
+
+formularioIdentificarUsuario?.addEventListener('submit', async evento => {
+    evento.preventDefault();
+    const submit = formularioIdentificarUsuario.querySelector('[type="submit"]');
+    submit.disabled = true;
+    try {
+        const result = await solicitarApi(
+            `/api/admin/recovery-requests/${formularioIdentificarUsuario.dataset.solicitudId}/identify-username`,
+            {
+                method: 'POST',
+                body: JSON.stringify({ identifier: campo('cuenta-identificar-usuario').value.trim() })
+            }
+        );
+        const identifier = result.data.targetUser.username || result.data.targetUser.email;
+        modalIdentificarUsuario.close();
+        formularioIdentificarUsuario.reset();
+        delete formularioIdentificarUsuario.dataset.solicitudId;
+        await cargarSolicitudesRecuperacion();
+        avisoAdmin(`Cuenta identificada: ${identifier}. Comunica el usuario por un canal verificado.`);
+    } catch (error) {
+        avisoAdmin(error.message, true);
+    } finally {
+        submit.disabled = false;
+    }
+});
+
+formularioRestablecerRecuperacion?.addEventListener('submit', async evento => {
+    evento.preventDefault();
+    const identifier = campo('cuenta-restablecer-recuperacion').value.trim();
+    const password = campo('nueva-contrasena-recuperacion').value;
+    const confirmation = campo('confirmar-contrasena-recuperacion').value;
+    if (password.length < 1 || password.length > 10) {
+        avisoAdmin('La contraseña debe tener entre 1 y 10 caracteres.', true);
+        return;
+    }
+    if (password !== confirmation) {
+        avisoAdmin('Las contraseñas no coinciden.', true);
+        return;
+    }
+
+    const submit = formularioRestablecerRecuperacion.querySelector('[type="submit"]');
+    submit.disabled = true;
+    try {
+        await solicitarApi(`/api/admin/recovery-requests/${formularioRestablecerRecuperacion.dataset.solicitudId}/reset`, {
+            method: 'POST',
+            body: JSON.stringify({ identifier, password })
+        });
+        modalRestablecerRecuperacion.close();
+        formularioRestablecerRecuperacion.reset();
+        delete formularioRestablecerRecuperacion.dataset.solicitudId;
+        await Promise.all([cargarSolicitudesRecuperacion(), cargarUsuariosDesdeApi()]);
+        avisoAdmin('Contraseña restablecida. Comunica el acceso a la persona por un canal verificado.');
+    } catch (error) {
+        avisoAdmin(error.message, true);
+    } finally {
+        submit.disabled = false;
+    }
+});
+
 document.querySelector('.menu-movil').addEventListener('click', () => lateralAdmin.classList.toggle('abierto'));
 document.getElementById('buscar-usuario').addEventListener('input', () => {
     clearTimeout(temporizadorBusquedaUsuarios);
@@ -1086,9 +1293,8 @@ campo('form-usuario').addEventListener('submit', evento => {
         avisoAdmin('Los usuarios académicos deben tener un correo válido.', true);
         return;
     }
-    const asignaturas = rol === 'Administrador' ? [] : Array.from(campo('usuario-asignaturas').selectedOptions).map(opcion => opcion.value);
-    if (rol !== 'Administrador' && (!campo('usuario-programa').value || !asignaturas.length)) {
-        avisoAdmin('Selecciona un programa académico y al menos una asignatura registrada.', true);
+    if (rol !== 'Administrador' && !campo('usuario-programa').value) {
+        avisoAdmin('Selecciona un programa académico.', true);
         return;
     }
     const semestres = semestresSeleccionados();
@@ -1106,15 +1312,14 @@ campo('form-usuario').addEventListener('submit', evento => {
         role: Object.entries(rolesUsuario).find(([, label]) => label === rol)?.[0],
         ...(rol !== 'Administrador' ? {
             programId: campo('usuario-programa').value,
-            subjects: asignaturas
         } : {}),
         semester: rol === 'Estudiante' ? Number(semestres[0]) : null,
         active: campo('usuario-estado').value === 'Activo'
     };
     const password = campo('usuario-contrasena').value;
     if (password) registro.password = password;
-    if (!idEditar && password.length < 8) {
-        avisoAdmin('La contraseña debe tener al menos 8 caracteres.', true);
+    if ((!idEditar || password) && (password.length < 1 || password.length > 10)) {
+        avisoAdmin('La contraseña debe tener entre 1 y 10 caracteres.', true);
         return;
     }
 
@@ -1266,7 +1471,6 @@ document.getElementById('form-admin').addEventListener('submit', async evento =>
             });
             await cargarAsignaturasDesdeApi();
             llenarProgramas(campo('usuario-programa').value);
-            llenarAsignaturas(Array.from(campo('usuario-asignaturas').selectedOptions).map(option => option.value));
             avisoAdmin(subjectId ? 'Asignatura actualizada correctamente.' : 'Asignatura creada correctamente.');
             modalAdmin.close();
             formulario.reset();
@@ -1306,6 +1510,16 @@ async function inicializarAdministrador() {
             if (etiqueta?.textContent.startsWith('Cargando')) etiqueta.textContent = 'No se pudo cargar el dato';
         });
     }
+    try {
+        await cargarSolicitudesRecuperacion();
+    } catch (error) {
+        avisoAdmin(error.message, true);
+    }
 }
 
 inicializarAdministrador();
+window.setInterval(() => {
+    if (document.visibilityState === 'visible') {
+        cargarSolicitudesRecuperacion().catch(error => console.error('No se pudieron consultar solicitudes de recuperación:', error));
+    }
+}, 30000);

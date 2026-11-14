@@ -5,6 +5,7 @@
 .rp-heading p { color: rgba(240,248,255,.76); font-size: 14px; line-height: 1.5; }
 .rp-content { display: grid; gap: 18px; }
 .rp-metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(145px,1fr)); gap: 12px; }
+.rp-section-title { margin: 10px 0 -8px; color: #fff; font-size: 17px; }
 .rp-dato,.rp-card,.rp-form,.rp-table-wrap { min-width: 0; padding: 17px; border: 1px solid rgba(144,221,255,.22); border-radius: 8px; background: rgba(7,18,34,.72); }
 .rp-dato span,.rp-dato strong { display: block; }
 .rp-dato span,.rp-card small { color: rgba(240,248,255,.7); font-size: 12px; }

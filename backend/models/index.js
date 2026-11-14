@@ -125,7 +125,8 @@ practiceAssignmentSchema.path('endDate').validate(function (endDate) {
 }, 'La fecha final debe ser igual o posterior a la fecha inicial.');
 
 const activitySchema = new Schema({
-    assignment: { type: objectId, ref: 'PracticeAssignment', required: true },
+    assignment: { type: objectId, ref: 'PracticeAssignment' },
+    subject: { type: objectId, ref: 'AcademicSubject' },
     author: { type: objectId, ref: 'User', required: true },
     title: { type: String, required: true, trim: true, maxlength: 180 },
     instructions: { type: String, required: true, trim: true, maxlength: 5000 },
@@ -135,6 +136,7 @@ const activitySchema = new Schema({
 }, { timestamps: true });
 
 activitySchema.index({ assignment: 1, status: 1 });
+activitySchema.index({ subject: 1, status: 1 });
 
 const evidenceSchema = new Schema({
     name: { type: String, required: true, trim: true, maxlength: 255 },
@@ -145,7 +147,7 @@ const evidenceSchema = new Schema({
 
 const submissionSchema = new Schema({
     activity: { type: objectId, ref: 'Activity', required: true },
-    assignment: { type: objectId, ref: 'PracticeAssignment', required: true },
+    assignment: { type: objectId, ref: 'PracticeAssignment' },
     student: { type: objectId, ref: 'User', required: true },
     response: { type: String, trim: true, maxlength: 10000 },
     evidence: { type: [evidenceSchema], default: [] },
@@ -177,6 +179,18 @@ const evaluationSchema = new Schema({
     evaluatedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
 
+const studentNotificationSchema = new Schema({
+    recipient: { type: objectId, ref: 'User', required: true, index: true },
+    actor: { type: objectId, ref: 'User', default: null },
+    type: { type: String, required: true, enum: ['evaluation', 'observation', 'submission', 'practiceLog', 'practice', 'activity'] },
+    title: { type: String, required: true, trim: true, maxlength: 160 },
+    message: { type: String, required: true, trim: true, maxlength: 1000 },
+    view: { type: String, required: true, trim: true, maxlength: 60 },
+    readAt: { type: Date, default: null }
+}, { timestamps: true });
+
+studentNotificationSchema.index({ recipient: 1, readAt: 1, createdAt: -1 });
+
 const practiceLogSchema = new Schema({
     assignment: { type: objectId, ref: 'PracticeAssignment', required: true },
     student: { type: objectId, ref: 'User', required: true },
@@ -194,12 +208,25 @@ const adminAuditSchema = new Schema({
     actor: { type: objectId, ref: 'User', required: true },
     actorName: { type: String, required: true, trim: true, maxlength: 170 },
     action: { type: String, required: true, enum: ['created', 'updated', 'deleted', 'activated', 'deactivated'] },
-    entity: { type: String, required: true, enum: ['user', 'program', 'subject', 'institution', 'practiceType', 'assignment', 'activity', 'submission', 'observation', 'evaluation', 'practiceLog'] },
+    entity: { type: String, required: true, enum: ['user', 'program', 'subject', 'institution', 'practiceType', 'assignment', 'activity', 'submission', 'observation', 'evaluation', 'practiceLog', 'passwordRecovery'] },
     entityId: { type: String, required: true, maxlength: 80 },
     summary: { type: String, required: true, trim: true, maxlength: 300 }
 }, { timestamps: { createdAt: true, updatedAt: false } });
 
 adminAuditSchema.index({ createdAt: -1 });
+
+const passwordRecoveryRequestSchema = new Schema({
+    fullName: { type: String, required: true, trim: true, maxlength: 160 },
+    contactEmail: { type: String, required: true, trim: true, lowercase: true, maxlength: 254 },
+    accountIdentifier: { type: String, trim: true, lowercase: true, maxlength: 254 },
+    requestType: { type: String, required: true, enum: ['usuario', 'contrasena', 'ambos'] },
+    status: { type: String, enum: ['pendiente', 'resuelta', 'descartada'], default: 'pendiente' },
+    targetUser: { type: objectId, ref: 'User', default: null },
+    handledBy: { type: objectId, ref: 'User', default: null },
+    handledAt: { type: Date }
+}, { timestamps: true });
+
+passwordRecoveryRequestSchema.index({ status: 1, createdAt: -1 });
 
 module.exports = {
     User: mongoose.model('User', userSchema),
@@ -212,6 +239,8 @@ module.exports = {
     Submission: mongoose.model('Submission', submissionSchema),
     Observation: mongoose.model('Observation', observationSchema),
     Evaluation: mongoose.model('Evaluation', evaluationSchema),
+    StudentNotification: mongoose.model('StudentNotification', studentNotificationSchema),
     PracticeLog: mongoose.model('PracticeLog', practiceLogSchema),
-    AdminAudit: mongoose.model('AdminAudit', adminAuditSchema)
+    AdminAudit: mongoose.model('AdminAudit', adminAuditSchema),
+    PasswordRecoveryRequest: mongoose.model('PasswordRecoveryRequest', passwordRecoveryRequestSchema)
 };

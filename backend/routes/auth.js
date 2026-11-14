@@ -2,8 +2,9 @@ const crypto = require('node:crypto');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
-const { User } = require('../models');
+const { User, PasswordRecoveryRequest } = require('../models');
 const { requireAuth, setSessionCookie, clearSessionCookie } = require('../middleware/auth');
+const { isValidPassword } = require('../utils/password');
 
 const router = express.Router();
 const authLimiter = rateLimit({
@@ -12,6 +13,13 @@ const authLimiter = rateLimit({
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     message: { error: 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.' }
+});
+const recoveryLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: 'Se alcanzó el límite de solicitudes. Inténtalo más tarde.' }
 });
 
 function cleanText(value) {
@@ -55,8 +63,8 @@ router.post('/setup', authLimiter, async (req, res, next) => {
         const { firstName, lastName, username, password } = req.body || {};
         const normalizedUsername = cleanText(username).toLowerCase();
         if (!cleanText(firstName) || !cleanText(lastName) || !/^[a-z0-9._-]{3,40}$/.test(normalizedUsername) ||
-            typeof password !== 'string' || password.length < 10) {
-            return res.status(400).json({ error: 'Completa nombre, apellido y un usuario de 3 a 40 caracteres (letras, números, punto, guion o guion bajo). La contraseña debe tener al menos 10 caracteres.' });
+            !isValidPassword(password)) {
+            return res.status(400).json({ error: 'Completa nombre, apellido y un usuario de 3 a 40 caracteres (letras, números, punto, guion o guion bajo). La contraseña debe tener entre 1 y 10 caracteres.' });
         }
         if (await User.exists({ role: 'administrador' })) {
             return res.status(409).json({ error: 'El administrador inicial ya fue configurado.' });
@@ -88,6 +96,34 @@ router.post('/setup', authLimiter, async (req, res, next) => {
         if (error.name === 'ValidationError') {
             return res.status(400).json({ error: error.message });
         }
+        next(error);
+    }
+});
+
+router.post('/recovery-requests', recoveryLimiter, async (req, res, next) => {
+    try {
+        const { fullName, contactEmail, accountIdentifier = '', requestType } = req.body || {};
+        const normalizedName = cleanText(fullName);
+        const normalizedEmail = cleanText(contactEmail).toLowerCase();
+        const normalizedIdentifier = cleanText(accountIdentifier).toLowerCase();
+        if (normalizedName.length < 2 || normalizedName.length > 160 ||
+            typeof contactEmail !== 'string' || normalizedEmail.length > 254 ||
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) ||
+            typeof accountIdentifier !== 'string' || normalizedIdentifier.length > 254 ||
+            !['usuario', 'contrasena', 'ambos'].includes(requestType)) {
+            return res.status(400).json({ error: 'Completa tu nombre, un correo de contacto válido y el tipo de ayuda que necesitas.' });
+        }
+
+        await PasswordRecoveryRequest.create({
+            fullName: normalizedName,
+            contactEmail: normalizedEmail,
+            accountIdentifier: normalizedIdentifier,
+            requestType
+        });
+        res.status(202).json({
+            message: 'Solicitud recibida. El administrador la revisará desde el panel. El sistema no envía correos automáticos; usa un canal institucional para hacer seguimiento.'
+        });
+    } catch (error) {
         next(error);
     }
 });

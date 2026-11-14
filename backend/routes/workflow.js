@@ -3,12 +3,14 @@ const mongoose = require('mongoose');
 const {
     User,
     AcademicProgram,
+    AcademicSubject,
     PracticeAssignment,
     Activity,
     Submission,
     Observation,
     Evaluation,
-    PracticeLog
+    PracticeLog,
+    StudentNotification
 } = require('../models');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
@@ -52,6 +54,55 @@ function assertObjectId(value, label) {
     if (!mongoose.isValidObjectId(value)) throw badRequest(`${label} no es válido.`);
 }
 
+async function notifyStudents(studentIds, actor, type, title, message, view) {
+    const recipientIds = [...new Set(studentIds.filter(Boolean).map(String))];
+    if (!recipientIds.length) return;
+    await StudentNotification.insertMany(recipientIds.map(recipient => ({
+        recipient,
+        actor: actor?._id,
+        type,
+        title,
+        message: String(message || '').slice(0, 1000),
+        view
+    })));
+}
+
+router.get('/notifications', requireRole('estudiante'), async (req, res, next) => {
+    try {
+        const filter = { recipient: req.user._id };
+        const [notifications, unreadCount] = await Promise.all([
+            StudentNotification.find(filter).sort({ createdAt: -1 }).limit(50).populate('actor', 'firstName lastName role'),
+            StudentNotification.countDocuments({ ...filter, readAt: null })
+        ]);
+        res.json({ data: { notifications, unreadCount } });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.patch('/notifications/read-all', requireRole('estudiante'), async (req, res, next) => {
+    try {
+        await StudentNotification.updateMany({ recipient: req.user._id, readAt: null }, { $set: { readAt: new Date() } });
+        res.json({ data: { unreadCount: 0 } });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.patch('/notifications/:id/read', requireRole('estudiante'), async (req, res, next) => {
+    try {
+        assertObjectId(req.params.id, 'La notificación');
+        const notification = await StudentNotification.findOneAndUpdate(
+            { _id: req.params.id, recipient: req.user._id, readAt: null },
+            { $set: { readAt: new Date() } },
+            { new: true }
+        );
+        res.json({ data: notification });
+    } catch (error) {
+        next(error);
+    }
+});
+
 async function ownedAssignment(user, assignmentId, roles = [user.role]) {
     assertObjectId(assignmentId, 'La asignación');
     const assignment = await PracticeAssignment.findById(assignmentId);
@@ -70,9 +121,27 @@ router.get('/dashboard', async (req, res, next) => {
     try {
         const assignments = await assignmentsFor(req.user);
         const assignmentIds = idsOf(assignments);
-        const [activities, submissions, logs, observations, evaluations] = await Promise.all([
-            Activity.find({ assignment: { $in: assignmentIds } }).sort({ createdAt: -1 }).limit(250).populate('assignment', 'student teacher practiceType').populate('author', 'firstName lastName'),
-            Submission.find({ assignment: { $in: assignmentIds } }).sort({ submittedAt: -1 }).limit(250).populate('activity', 'title').populate('assignment', 'student teacher').populate('student', 'firstName lastName email'),
+        const subjectRoleField = req.user.role === 'docente' ? 'teachers' : req.user.role === 'estudiante' ? 'students' : null;
+        const subjectFilter = subjectRoleField ? { active: true, [subjectRoleField]: req.user._id } : null;
+        if (req.user.role === 'estudiante' && req.user.semester) {
+            subjectFilter.semester = Number(req.user.semester);
+        }
+        const subjectsQuery = subjectFilter
+            ? AcademicSubject.find(subjectFilter)
+                .sort({ semester: 1, name: 1 })
+                .populate('teachers', 'firstName middleName lastName secondLastName email')
+                .populate({ path: 'students', match: { active: true }, select: 'firstName middleName lastName secondLastName email studentCode semester' })
+            : Promise.resolve([]);
+        const subjects = await subjectsQuery;
+        const subjectIds = subjects.map(subject => subject._id);
+        const activities = await Activity.find({ $or: [{ assignment: { $in: assignmentIds } }, { subject: { $in: subjectIds } }] })
+            .sort({ createdAt: -1 }).limit(250)
+            .populate('assignment', 'student teacher practiceType')
+            .populate('subject', 'name code semester')
+            .populate('author', 'firstName lastName');
+        const activityIds = activities.map(activity => activity._id);
+        const [submissions, logs, observations, evaluations] = await Promise.all([
+            Submission.find({ activity: { $in: activityIds } }).sort({ submittedAt: -1 }).limit(250).populate('activity', 'title subject assignment').populate('assignment', 'student teacher').populate('student', 'firstName lastName email'),
             PracticeLog.find({ assignment: { $in: assignmentIds } }).sort({ date: -1 }).limit(500).populate('assignment', 'student practiceType institution').populate('student', 'firstName lastName').populate('reviewedBy', 'firstName lastName'),
             Observation.find({ assignment: { $in: assignmentIds }, ...(req.user.role === 'estudiante' ? { visibleToStudent: true } : {}) }).sort({ observedAt: -1 }).limit(250).populate('student', 'firstName lastName').populate('author', 'firstName lastName'),
             Evaluation.find({ assignment: { $in: assignmentIds } }).sort({ evaluatedAt: -1 }).limit(250).populate('assignment', 'student practiceType').populate('student', 'firstName lastName').populate('evaluator', 'firstName lastName')
@@ -82,6 +151,13 @@ router.get('/dashboard', async (req, res, next) => {
         res.json({
             data: {
                 assignments,
+                subjects: subjects.map(subject => {
+                    const data = subject.toObject();
+                    if (subject.semester) {
+                        data.students = data.students.filter(student => Number(student.semester) === Number(subject.semester));
+                    }
+                    return data;
+                }),
                 activities,
                 submissions,
                 logs,
@@ -110,23 +186,43 @@ router.get('/dashboard', async (req, res, next) => {
 
 router.post('/activities', requireRole('docente'), async (req, res, next) => {
     try {
-        const { assignment: assignmentId, title, instructions, dueDate, resourceUrl } = req.body || {};
-        const assignment = await ownedAssignment(req.user, assignmentId, ['docente']);
-        if (!assignment) return res.status(404).json({ error: 'No se encontró una práctica asignada a tu cuenta.' });
-        if (assignment.approvalStatus !== 'aprobada') {
-            return res.status(409).json({ error: 'La práctica debe ser aprobada por el director antes de publicar actividades.' });
+        const { assignment: assignmentId, subject: subjectId, title, instructions, dueDate, resourceUrl } = req.body || {};
+        let assignment = null;
+        let subject = null;
+        if (subjectId) {
+            assertObjectId(subjectId, 'La asignatura');
+            subject = await AcademicSubject.findOne({ _id: subjectId, active: true, teachers: req.user._id });
+            if (!subject) return res.status(404).json({ error: 'No tienes esta asignatura asignada.' });
+        } else {
+            assignment = await ownedAssignment(req.user, assignmentId, ['docente']);
+            if (!assignment) return res.status(404).json({ error: 'No se encontro una practica asignada a tu cuenta.' });
+            if (assignment.approvalStatus !== 'aprobada') {
+                return res.status(409).json({ error: 'La practica debe ser aprobada antes de publicar actividades.' });
+        }
         }
         if (typeof title !== 'string' || !title.trim() || typeof instructions !== 'string' || !instructions.trim()) {
             throw badRequest('El título y las instrucciones son obligatorios.');
         }
         const activity = await Activity.create({
-            assignment: assignment._id,
+            ...(assignment ? { assignment: assignment._id } : {}),
+            ...(subject ? { subject: subject._id } : {}),
             author: req.user._id,
             title: title.trim(),
             instructions: instructions.trim(),
             dueDate: dueDate || undefined,
             resourceUrl: resourceUrl || undefined
         });
+        let recipientIds = assignment ? [assignment.student] : [];
+        if (subject) {
+            const students = await User.find({
+                _id: { $in: subject.students },
+                role: 'estudiante',
+                active: true,
+                ...(subject.semester ? { semester: Number(subject.semester) } : {})
+            }).select('_id');
+            recipientIds = students.map(student => student._id);
+        }
+        await notifyStudents(recipientIds, req.user, 'activity', 'Nueva actividad', `Tu docente publicó: ${activity.title}`, 'mis-actividades');
         res.status(201).json({ data: activity });
     } catch (error) {
         next(error);
@@ -137,11 +233,19 @@ router.post('/submissions', requireRole('estudiante'), async (req, res, next) =>
     try {
         const { activity: activityId, response = '', evidence = [] } = req.body || {};
         assertObjectId(activityId, 'La actividad');
-        const activity = await Activity.findById(activityId).select('assignment status');
+        const activity = await Activity.findById(activityId).select('assignment subject status');
         if (!activity) return res.status(404).json({ error: 'No se encontró la actividad.' });
-        const assignment = await ownedAssignment(req.user, activity.assignment, ['estudiante']);
-        if (!assignment) return res.status(403).json({ error: 'La actividad no corresponde a una práctica asignada a tu cuenta.' });
-        if (assignment.approvalStatus !== 'aprobada') {
+        const assignment = activity.assignment ? await ownedAssignment(req.user, activity.assignment, ['estudiante']) : null;
+        const subject = activity.subject
+            ? await AcademicSubject.findOne({
+                _id: activity.subject,
+                active: true,
+                students: req.user._id,
+                ...(req.user.semester ? { semester: Number(req.user.semester) } : {})
+            })
+            : null;
+        if (!assignment && !subject) return res.status(403).json({ error: 'No tienes esta actividad asignada.' });
+        if (assignment && assignment.approvalStatus !== 'aprobada') {
             return res.status(409).json({ error: 'La práctica todavía no ha sido aprobada.' });
         }
         if (typeof response !== 'string' || response.length > 10000 || !Array.isArray(evidence)) {
@@ -157,7 +261,7 @@ router.post('/submissions', requireRole('estudiante'), async (req, res, next) =>
             { activity: activity._id, student: req.user._id },
             {
                 $set: {
-                    assignment: assignment._id,
+                    ...(assignment ? { assignment: assignment._id } : {}),
                     response: response.trim(),
                     evidence,
                     status: 'en_revision',
@@ -173,13 +277,19 @@ router.post('/submissions', requireRole('estudiante'), async (req, res, next) =>
     }
 });
 
-router.patch('/submissions/:id/review', requireRole('docente'), async (req, res, next) => {
+router.patch('/submissions/:id/review', requireRole('docente', 'asesor'), async (req, res, next) => {
     try {
         assertObjectId(req.params.id, 'La entrega');
         const submission = await Submission.findById(req.params.id);
         if (!submission) return res.status(404).json({ error: 'No se encontró la entrega.' });
-        const assignment = await ownedAssignment(req.user, submission.assignment, ['docente']);
-        if (!assignment) return res.status(403).json({ error: 'No tienes acceso a esta entrega.' });
+        const assignment = submission.assignment
+            ? await ownedAssignment(req.user, submission.assignment, ['docente', 'asesor'])
+            : null;
+        const activity = await Activity.findById(submission.activity).select('subject');
+        const subject = activity?.subject && req.user.role === 'docente'
+            ? await AcademicSubject.findOne({ _id: activity.subject, teachers: req.user._id })
+            : null;
+        if (!assignment && !subject) return res.status(403).json({ error: 'No tienes acceso a esta entrega.' });
         const { status, feedback = '' } = req.body || {};
         if (!['aprobada', 'requiere_cambios'].includes(status) || typeof feedback !== 'string' || feedback.length > 5000) {
             throw badRequest('Selecciona un estado válido e ingresa una retroalimentación de hasta 5000 caracteres.');
@@ -187,6 +297,7 @@ router.patch('/submissions/:id/review', requireRole('docente'), async (req, res,
         submission.status = status;
         submission.feedback = feedback.trim();
         await submission.save();
+        await notifyStudents([submission.student], req.user, 'submission', 'Entrega revisada', `${status === 'aprobada' ? 'Tu entrega fue aprobada.' : 'Tu entrega requiere cambios.'}${feedback.trim() ? ` Comentario: ${feedback.trim()}` : ''}`, 'evidencias');
         res.json({ data: submission });
     } catch (error) {
         next(error);
@@ -229,6 +340,7 @@ router.patch('/logs/:id/review', requireRole('docente', 'asesor'), async (req, r
         log.reviewComment = reviewComment.trim();
         log.reviewedBy = req.user._id;
         await log.save();
+        await notifyStudents([log.student], req.user, 'practiceLog', 'Bitácora revisada', `Tu registro de horas fue ${status === 'aprobada' ? 'aprobado' : 'rechazado'}.${reviewComment.trim() ? ` Comentario: ${reviewComment.trim()}` : ''}`, 'informacion-proceso');
         res.json({ data: log });
     } catch (error) {
         next(error);
@@ -250,6 +362,7 @@ router.post('/observations', requireRole('docente', 'asesor'), async (req, res, 
             body: body.trim(),
             visibleToStudent: true
         });
+        await notifyStudents([assignment.student], req.user, 'observation', category || 'Nueva retroalimentación', body.trim(), 'retroalimentaciones');
         res.status(201).json({ data: observation });
     } catch (error) {
         next(error);
@@ -274,6 +387,7 @@ router.post('/evaluations', requireRole('docente'), async (req, res, next) => {
             score,
             feedback: feedback.trim()
         });
+        await notifyStudents([assignment.student], req.user, 'evaluation', 'Nueva calificación', `Recibiste una calificación de ${evaluation.score}/5. ${feedback.trim()}`, 'evaluaciones');
         res.status(201).json({ data: evaluation });
     } catch (error) {
         next(error);
@@ -298,6 +412,7 @@ router.patch('/assignments/:id/approval', requireRole('director'), async (req, r
         assignment.approvedBy = req.user._id;
         assignment.approvedAt = new Date();
         await assignment.save();
+        await notifyStudents([assignment.student._id], req.user, 'practice', 'Actualización de práctica', `Tu práctica fue ${approvalStatus === 'aprobada' ? 'aprobada' : 'rechazada'}.${approvalComment.trim() ? ` Comentario: ${approvalComment.trim()}` : ''}`, 'mi-practica');
         res.json({ data: assignment });
     } catch (error) {
         next(error);
