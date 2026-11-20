@@ -4,7 +4,7 @@ const path = require('node:path');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const connectDatabase = require('./config/database');
+const database = require('./config/database');
 const authRouter = require('./routes/auth');
 const apiRouter = require('./routes/api');
 const workflowRouter = require('./routes/workflow');
@@ -20,8 +20,7 @@ if (process.env.CORS_ORIGIN) {
 app.use(express.json({ limit: '7mb' }));
 
 app.get('/api/health', (req, res) => {
-    const mongoose = require('mongoose');
-    res.json({ status: 'ok', database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' });
+    res.json({ status: 'ok', database: database.isConnected() ? 'connected' : 'disconnected' });
 });
 
 app.use('/api/auth', authRouter);
@@ -45,12 +44,12 @@ app.use((error, req, res, next) => {
 
 async function startServer() {
     try {
-        await connectDatabase();
+        await database.connectDatabase();
         app.listen(port, host, () => {
             console.log(`Ruta Praxis disponible en http://${host}:${port}`);
         });
     } catch (error) {
-        console.error('No fue posible iniciar el backend o conectar MongoDB:', error.message);
+        console.error('No fue posible iniciar el backend o conectar Oracle Database:', error.message);
         process.exitCode = 1;
     }
 }

@@ -171,10 +171,10 @@ async function cargarEstudiantesAsignados() {
         const unicos = new Set(estudiantes.map(estudiante => estudiante._id));
         document.getElementById('dato-estudiantes-docente').textContent = unicos.size;
         document.getElementById('texto-estudiantes-docente').textContent =
-            unicos.size ? `${estudiantes.length} asignaciones entre materias` : 'Sin estudiantes asignados';
+            unicos.size ? `${unicos.size} estudiantes asignados` : 'Sin estudiantes asignados';
 
         if (!estudiantes.length) {
-            tabla.innerHTML = '<tr><td colspan="5" class="vacio-tabla">No hay estudiantes asignados en tus asignaturas.</td></tr>';
+            tabla.innerHTML = '<tr><td colspan="5" class="vacio-tabla">No tienes estudiantes asignados por el Administrador.</td></tr>';
             return;
         }
 
@@ -184,7 +184,7 @@ async function cargarEstudiantesAsignados() {
                 .filter(Boolean).join(' ');
             const celdas = [
                 nombre,
-                `${estudiante.subject.name}${estudiante.subject.semester ? ` · Semestre ${estudiante.subject.semester}` : ''}`,
+                `${estudiante.practice.name}${estudiante.practice.semester ? ` · Semestre ${estudiante.practice.semester}` : ''}`,
                 estudiante.email || 'Sin correo',
                 estudiante.studentCode || 'Sin código',
                 'Asignado'

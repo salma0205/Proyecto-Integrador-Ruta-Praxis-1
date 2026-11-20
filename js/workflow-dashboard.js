@@ -4,30 +4,30 @@
     if (!supportedRoles.includes(role)) return;
 
     const titles = {
-        inicio: ['Inicio', 'Resumen de tu proceso con información guardada en MongoDB.'],
+        inicio: ['Inicio', 'Resumen de tu proceso con información guardada en Oracle Database.'],
         'mi-practica': ['Mis prácticas', 'Consulta tus asignaciones y su estado de aprobación.'],
         'mis-actividades': ['Mis actividades', 'Actividades asignadas por tus docentes.'],
         evidencias: ['Evidencias y entregas', 'Entrega respuestas y consulta el estado de revisión.'],
         retroalimentaciones: ['Retroalimentaciones', 'Observaciones y comentarios de tus responsables.'],
         'informacion-proceso': ['Bitácora y horas', 'Registra las horas realizadas y consulta su validación.'],
         evaluaciones: ['Evaluaciones', 'Calificaciones y retroalimentación registradas.'],
-        estudiantes: ['Estudiantes', 'Estudiantes y prácticas relacionadas con tu cuenta.'],
+        estudiantes: ['Estudiantes', 'Consulta a todos los estudiantes activos de tu programa y semestre, tengan práctica o no.'],
         actividades: ['Actividades', 'Publica instrucciones para los estudiantes asignados.'],
-        entregas: ['Entregas', 'Revisa las entregas recibidas.'],
         proceso: ['Proceso de estudiantes', 'Consulta horas y seguimientos registrados.'],
         retroalimentacion: ['Retroalimentación', 'Registra observaciones visibles para el estudiante.'],
         seguimiento: ['Seguimiento', 'Revisa y valida las horas de práctica.'],
-        practicas: ['Supervisar prácticas', 'Aprueba o rechaza las prácticas de tu programa.'],
-        horas: ['Supervisar horas', 'Revisa las horas aprobadas y pendientes.'],
-        informes: ['Informes', 'Indicadores calculados con los registros de tu programa.'],
-        comparar: ['Comparar resultados', 'Resumen consolidado de prácticas y horas.']
+        asistencia: ['Asistencia y desempeño', 'Registra la asistencia y el desempeño del estudiante en la entidad de práctica.'],
+        practicas: ['Gestionar prácticas', 'Asigna estudiantes activos de tu semestre a prácticas. Las prácticas solo se asignan en los semestres 8 a 10.'],
+        horas: ['Supervisar horas', 'Revisa las horas y gestiona la aprobación de las prácticas.']
     };
     const endpoints = {
+        assignment: '/api/workflow/assignments',
         activity: '/api/workflow/activities',
         submission: '/api/workflow/submissions',
         log: '/api/workflow/logs',
         observation: '/api/workflow/observations',
-        evaluation: '/api/workflow/evaluations'
+        evaluation: '/api/workflow/evaluations',
+        attendance: '/api/workflow/attendance'
     };
     let dashboard;
 
@@ -55,16 +55,31 @@
         window.setTimeout(() => { node.hidden = true; }, 4500);
     };
     const api = async (url, options = {}) => {
+        const headers = { ...options.headers };
+        if (!(options.body instanceof FormData)) headers['Content-Type'] = headers['Content-Type'] || 'application/json';
         const response = await fetch(url, {
             credentials: 'same-origin',
             ...options,
-            headers: { 'Content-Type': 'application/json', ...options.headers }
+            headers
         });
         const result = response.status === 204 ? null : await response.json();
         if (!response.ok) throw new Error(result?.error || 'No se pudo completar la operación.');
         return result;
     };
-    const form = (kind, title, fields, button) => `<form class="rp-form" data-workflow-form="${kind}"><h3>${escapeHtml(title)}</h3>${fields}<button type="submit">${escapeHtml(button)}</button></form>`;
+    const loadDashboard = async () => {
+        dashboard = (await api('/api/workflow/dashboard')).data;
+        if (role === 'director') {
+            try {
+                dashboard.practiceOptions = (await api('/api/workflow/practice-options')).data;
+            } catch (error) {
+                dashboard.practiceOptions = {
+                    students: [], academicStudents: [], teachers: [], advisors: [], institutions: [], practiceTypes: []
+                };
+                dashboard.practiceOptionsError = error.message;
+            }
+        }
+    };
+    const form = (kind, title, fields, button, extraClass = '') => `<form class="rp-form ${extraClass}" data-workflow-form="${kind}"><h3>${escapeHtml(title)}</h3>${fields}<button type="submit">${escapeHtml(button)}</button></form>`;
     const listRows = (items, fn) => items.map(fn).join('');
     const status = item => item?.approvalStatus || item?.status || 'Sin estado';
     const statusPill = text => `<span class="rp-status">${escapeHtml(text)}</span>`;
@@ -90,13 +105,15 @@
     function overview() {
         const metrics = dashboard.metrics;
         const rows = listRows(dashboard.assignments, item => `<tr><td>${escapeHtml(assignmentName(item))}</td><td>${escapeHtml(assignmentStudent(item))}</td><td>${escapeHtml(item.institution?.name || '—')}</td><td>${statusPill(status(item))}</td></tr>`).slice(0, 12);
-        let content = `
+        const optionsWarning = role === 'director' && dashboard.practiceOptionsError
+            ? `<p class="rp-empty">No se pudieron cargar las opciones del Director: ${escapeHtml(dashboard.practiceOptionsError)} Verifica que tengas un programa activo y un semestre asignado.</p>`
+            : '';
+        let content = `${optionsWarning}
             <div class="rp-metrics">
                 ${value(role === 'estudiante' ? 'Mis prácticas' : 'Prácticas relacionadas', metrics.assignments)}
                 ${value('En curso', metrics.activeAssignments)}
                 ${value(role === 'estudiante' ? 'Horas aprobadas' : 'Estudiantes', role === 'estudiante' ? metrics.approvedHours : metrics.students)}
                 ${value('Horas cumplidas', `${metrics.hoursPercent}%`)}
-                ${role === 'docente' ? value('Entregas por revisar', metrics.pendingSubmissions) : ''}
                 ${role === 'asesor' ? value('Horas pendientes', metrics.pendingLogs) : ''}
                 ${role === 'director' ? value('Aprobaciones pendientes', metrics.pendingApprovals) : ''}
             </div>
@@ -126,10 +143,21 @@
         pageContent('inicio', titles.inicio, content);
     }
 
+    function activityResources(item) {
+        const links = [];
+        if (item.resourceUrl) {
+            links.push(`<a href="${escapeHtml(item.resourceUrl)}" target="_blank" rel="noopener noreferrer">Abrir enlace de apoyo</a>`);
+        }
+        for (const resource of item.resources || []) {
+            links.push(`<a href="${escapeHtml(resource.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(resource.name)}</a>`);
+        }
+        return links.length ? `<div class="rp-activity-resources">${links.join('')}</div>` : '';
+    }
+
     function renderStudent(id) {
         if (id === 'mi-practica') {
-            const rows = listRows(dashboard.assignments, item => `<tr><td>${escapeHtml(assignmentName(item))}</td><td>${escapeHtml(item.institution?.name || '—')}</td><td>${escapeHtml(dateText(item.startDate))} – ${escapeHtml(dateText(item.endDate))}</td><td>${statusPill(item.approvalStatus)}</td><td>${escapeHtml(item.approvalComment || '—')}</td></tr>`);
-            pageContent(id, titles[id], table(['Práctica', 'Institución', 'Fechas', 'Aprobación', 'Observación'], rows, 'Aún no tienes prácticas asignadas.'));
+            const rows = listRows(dashboard.assignments, item => `<tr><td>${escapeHtml(assignmentName(item))}</td><td>${escapeHtml(item.institution?.name || '—')}</td><td>${escapeHtml(item.requiredHours || item.practiceType?.requiredHours || 0)}</td><td>${escapeHtml(dateText(item.startDate))} – ${escapeHtml(dateText(item.endDate))}</td><td>${statusPill(item.approvalStatus)}</td><td>${escapeHtml(item.approvalComment || '—')}</td></tr>`);
+            pageContent(id, titles[id], table(['Práctica', 'Institución', 'Horas requeridas', 'Fechas', 'Aprobación', 'Observación'], rows, 'Aún no tienes prácticas asignadas.'));
         } else if (id === 'mis-actividades') {
             const groups = new Map();
             dashboard.activities.forEach(item => {
@@ -139,7 +167,7 @@
             });
             const cards = [...groups.entries()].map(([subjectName, activities]) => `<section class="rp-subject-activities"><h3 class="rp-section-title">${escapeHtml(subjectName)}</h3>${listRows(activities, item => {
                 const fields = `<input type="hidden" name="activity" value="${item._id}"><label>Respuesta / bitácora<textarea name="response" maxlength="10000" rows="4"></textarea></label><label>Nombre de evidencia<input name="evidenceName" maxlength="255" placeholder="Ej. Planeación de clase"></label><label>Enlace de evidencia (HTTP/HTTPS)<input name="evidenceUrl" type="url" placeholder="https://..."></label>`;
-                return `<article class="rp-card"><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.instructions)}</p><small>Fecha límite: ${escapeHtml(dateText(item.dueDate))} · ${escapeHtml(item.status)}</small>${form('submission', 'Enviar actividad o evidencia', fields, 'Enviar para revisión')}</article>`;
+                return `<article class="rp-card"><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.instructions)}</p>${activityResources(item)}<small>Fecha límite: ${escapeHtml(dateText(item.dueDate))} · ${escapeHtml(item.status)}</small>${form('submission', 'Enviar actividad o evidencia', fields, 'Enviar para revisión')}</article>`;
             })}</section>`).join('');
             pageContent(id, titles[id], cards || '<p class="rp-empty">No tienes actividades publicadas todavía.</p>');
         } else if (id === 'evidencias') {
@@ -161,15 +189,21 @@
 
     function renderTeacher(id) {
         if (id === 'estudiantes') {
-            const rows = listRows(dashboard.subjects || [], subject => (subject.students || []).map(student => `<tr><td>${escapeHtml(personName(student))}</td><td>${escapeHtml(student.email || '-')}</td><td>${escapeHtml(student.studentCode || '-')}</td><td>${escapeHtml(subject.name)}</td><td>${escapeHtml(subject.semester || '-')}</td></tr>`).join(''));
-            pageContent(id, titles[id], table(['Estudiante', 'Correo', 'Codigo', 'Asignatura', 'Semestre'], rows, 'No hay estudiantes asignados a tus asignaturas.'));
+            const rows = listRows(dashboard.assignedStudents || [], student => {
+                const subjects = (student.subjects || []).map(subject =>
+                    `${subject.name} · Semestre ${subject.semester || '-'}`
+                ).join(', ') || 'Sin asignaturas';
+                const directors = (student.assignedDirectors || []).map(personName).join(', ') || 'Sin Director asignado';
+                return `<tr><td>${escapeHtml(personName(student))}</td><td>${escapeHtml(student.email || '-')}</td><td>${escapeHtml(student.studentCode || '-')}</td><td>${escapeHtml(subjects)}</td><td>${escapeHtml(student.semester || '-')}</td><td>${escapeHtml(directors)}</td></tr>`;
+            });
+            pageContent(id, titles[id], table(['Estudiante', 'Correo', 'Código', 'Asignaturas', 'Semestre', 'Director'], rows, 'El Administrador aún no te asignó estudiantes.'));
         } else if (id === 'actividades') {
             const subjects = dashboard.subjects || [];
             const subjectSelect = `<label>Asignatura<select name="subject" required><option value="">Selecciona una asignatura</option>${subjects.map(subject => `<option value="${subject._id}">${escapeHtml(`${subject.name} · Semestre ${subject.semester || '-'}`)}</option>`).join('')}</select></label>`;
-            const fields = `${subjectSelect}<label>Título<input name="title" maxlength="180" required></label><label>Instrucciones<textarea name="instructions" maxlength="5000" required></textarea></label><label>Fecha límite<input name="dueDate" type="date"></label><label>Enlace de apoyo<input name="resourceUrl" type="url"></label>`;
-            const cards = listRows(dashboard.activities, item => `<article class="rp-card"><small>${escapeHtml(item.subject?.name || 'Práctica')}</small><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.instructions)}</p><small>${escapeHtml(dateText(item.dueDate))} · ${escapeHtml(item.status)}</small></article>`);
+            const fields = `${subjectSelect}<label>Título<input name="title" maxlength="180" required></label><label>Instrucciones<textarea name="instructions" maxlength="5000" required></textarea></label><label>Fecha límite<input name="dueDate" type="date"></label><label>Enlace de apoyo (Drive, YouTube o sitio web)<input name="resourceUrl" type="url" maxlength="2048" placeholder="https://..."></label><label>Archivos o videos de apoyo<input class="rp-resource-files" name="resources" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip"></label><small class="rp-resource-help">Hasta 5 archivos y 20 MB en total. Para videos más grandes, agrega un enlace.</small><small class="rp-selected-resources" aria-live="polite"></small>`;
+            const cards = listRows(dashboard.activities, item => `<article class="rp-card"><small>${escapeHtml(item.subject?.name || 'Práctica')}</small><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.instructions)}</p>${activityResources(item)}<small>${escapeHtml(dateText(item.dueDate))} · ${escapeHtml(item.status)}</small></article>`);
             pageContent(id, titles[id], `${form('activity', 'Publicar actividad', fields, 'Publicar actividad')}${cards || '<p class="rp-empty">Aún no hay actividades publicadas.</p>'}`);
-        } else if (id === 'entregas' || id === 'evidencias') {
+        } else if (id === 'evidencias') {
             const rows = listRows(dashboard.submissions, item => `<tr><td>${escapeHtml(personName(item.student))}</td><td>${escapeHtml(item.activity?.title || 'Actividad')}</td><td>${escapeHtml(item.response || item.evidence?.map(file => file.name).join(', ') || '—')}</td><td>${statusPill(item.status)}</td><td><form class="rp-review" data-submission="${item._id}"><select name="status"><option value="aprobada">Aprobar</option><option value="requiere_cambios">Solicitar cambios</option></select><input name="feedback" maxlength="5000" placeholder="Retroalimentación" required><button>Guardar revisión</button></form></td></tr>`);
             pageContent(id, titles[id], table(['Estudiante', 'Actividad', 'Entrega', 'Estado', 'Revisión'], rows, 'Aún no hay entregas recibidas.'));
         } else if (id === 'evaluaciones') {
@@ -179,6 +213,7 @@
             const rows = listRows(dashboard.evaluations, item => `<tr><td>${escapeHtml(personName(item.student))}</td><td>${escapeHtml(item.score)} / 5</td><td>${escapeHtml(item.feedback)}</td><td>${escapeHtml(dateText(item.evaluatedAt))}</td></tr>`);
             pageContent(id, titles[id], `${form('evaluation', 'Registrar evaluación', fields, 'Publicar evaluación')}${table(['Estudiante', 'Nota', 'Retroalimentación', 'Fecha'], rows, 'Aún no hay evaluaciones registradas.')}`);
         }
+
     }
 
     function renderAdvisor(id) {
@@ -198,6 +233,10 @@
         } else if (id === 'seguimiento') {
             const rows = listRows(dashboard.logs, item => `<tr><td>${escapeHtml(personName(item.student))}</td><td>${escapeHtml(dateText(item.date))}</td><td>${escapeHtml(item.hours)}</td><td>${escapeHtml(item.activityDescription)}</td><td>${statusPill(item.status)}</td><td>${item.status === 'pendiente' ? `<form class="rp-review-log" data-log="${item._id}"><select name="status"><option value="aprobada">Validar</option><option value="rechazada">Rechazar</option></select><input name="reviewComment" maxlength="2000" placeholder="Comentario"><button>Guardar</button></form>` : escapeHtml(item.reviewComment || '—')}</td></tr>`);
             pageContent(id, titles[id], table(['Estudiante', 'Fecha', 'Horas', 'Actividad', 'Estado', 'Validación'], rows, 'No hay registros de horas pendientes.'));
+        } else if (id === 'asistencia') {
+            const fields = `${selectAssignments()}<label>Fecha<input name="date" type="date" required></label><label>Asistencia<select name="attendanceStatus" required><option value="presente">Presente</option><option value="ausente">Ausente</option><option value="tardanza">Tardanza</option></select></label><label>Desempeño (0 a 5)<input name="performanceScore" type="number" min="0" max="5" step="0.1" required></label><label>Observaciones<textarea name="comments" maxlength="3000" required></textarea></label>`;
+            const rows = listRows(dashboard.attendanceValidations || [], item => `<tr><td>${escapeHtml(personName(item.student))}</td><td>${escapeHtml(dateText(item.date))}</td><td>${statusPill(item.attendanceStatus)}</td><td>${escapeHtml(item.performanceScore)} / 5</td><td>${escapeHtml(item.comments)}</td></tr>`);
+            pageContent(id, titles[id], `${form('attendance', 'Validar asistencia y desempeño', fields, 'Guardar validación')}${table(['Estudiante', 'Fecha', 'Asistencia', 'Desempeño', 'Observaciones'], rows, 'Aún no hay validaciones registradas.')}`);
         } else if (id === 'evaluaciones') {
             const rows = listRows(dashboard.evaluations, item => `<tr><td>${escapeHtml(personName(item.student))}</td><td>${escapeHtml(item.score)} / 5</td><td>${escapeHtml(item.feedback)}</td><td>${escapeHtml(dateText(item.evaluatedAt))}</td></tr>`);
             pageContent(id, titles[id], table(['Estudiante', 'Nota', 'Retroalimentación', 'Fecha'], rows, 'No hay evaluaciones asociadas.'));
@@ -206,23 +245,75 @@
 
     function renderDirector(id) {
         if (id === 'practicas') {
-            const rows = listRows(dashboard.assignments, item => `<tr><td>${escapeHtml(assignmentName(item))}</td><td>${escapeHtml(item.institution?.name || '—')}</td><td>${escapeHtml(assignmentStudent(item))}</td><td>${escapeHtml(personName(item.teacher))}</td><td>${statusPill(item.approvalStatus)}</td><td>${item.approvalStatus === 'pendiente' ? `<form class="rp-approval" data-assignment="${item._id}"><input name="approvalComment" maxlength="2000" placeholder="Comentario"><button name="approvalStatus" value="aprobada">Aprobar</button><button name="approvalStatus" value="rechazada">Rechazar</button></form>` : escapeHtml(item.approvalComment || '—')}</td></tr>`);
-            pageContent(id, titles[id], table(['Práctica', 'Institución', 'Estudiante', 'Docente', 'Estado', 'Decisión'], rows, 'No hay prácticas en los programas que diriges.'));
+            const options = dashboard.practiceOptions;
+            const students = options.students || [];
+            const advisors = options.advisors || [];
+            const institutions = options.institutions || [];
+            const practiceTypes = options.practiceTypes || [];
+            const studentPrompt = students.length
+                ? 'Selecciona un estudiante'
+                : 'No hay estudiantes activos de semestres 8, 9 o 10';
+            const studentOptions = students.map(student =>
+                `<option value="${escapeHtml(student._id)}" data-semester="${escapeHtml(student.semester)}">${escapeHtml(`${personName(student)} · Semestre ${student.semester}`)}</option>`
+            ).join('');
+            const institutionOptions = institutions.map(institution => {
+                const semesters = (institution.semesters || []).map(item =>
+                    Number(item && typeof item === 'object' ? item.semester : item)
+                );
+                return `<option value="${escapeHtml(institution._id)}" data-semesters="${escapeHtml(semesters.join(','))}" disabled>${escapeHtml(`${institution.name} · ${institution.address || ''}`)}</option>`;
+            }).join('');
+            const advisorOptions = advisors.map(advisor =>
+                `<option value="${escapeHtml(advisor._id)}">${escapeHtml(personName(advisor))}</option>`
+            ).join('');
+            const typeOptions = practiceTypes.map(type =>
+                `<option value="${escapeHtml(type.name)}"></option>`
+            ).join('');
+            const fields = `
+                <label>Tipo de práctica<input name="practiceType" list="rp-practice-types" maxlength="160" required><datalist id="rp-practice-types">${typeOptions}</datalist></label>
+                <label>Horas requeridas<input name="requiredHours" type="number" min="0.1" max="99999.9" step="0.1" required></label>
+                <label>Estudiante<select name="student" required><option value="">${studentPrompt}</option>${studentOptions}</select>${students.length ? '' : '<small>En Gestionar usuarios, verifica que esté activo y tenga asignado un semestre entre 8 y 10.</small>'}</label>
+                <label>Institución (mismo semestre)<select name="institution" required disabled><option value="">Selecciona una institución</option>${institutionOptions}</select></label>
+                <p class="rp-empty">Todos los docentes asignados por el Administrador al estudiante participarán en la práctica.</p>
+                <label>Asesor (opcional)<select name="accompanimentResponsible"><option value="">Sin asesor asignado</option>${advisorOptions}</select></label>
+                <label>Fecha de inicio<input name="startDate" type="date" required></label>
+                <label>Fecha de finalización<input name="endDate" type="date" required></label>
+            `;
+            const assignmentForm = form('assignment', 'Asignar práctica a estudiante', fields, 'Guardar práctica', 'rp-practice-form');
+            const warning = dashboard.practiceOptionsError
+                ? `<p class="rp-empty">No se pudieron cargar las opciones: ${escapeHtml(dashboard.practiceOptionsError)}</p>`
+                : '';
+            pageContent(id, titles[id], `${warning}${assignmentForm}`);
         } else if (id === 'estudiantes') {
-            const rows = listRows(dashboard.assignments, item => `<tr><td>${escapeHtml(assignmentStudent(item))}</td><td>${escapeHtml(assignmentName(item))}</td><td>${escapeHtml(item.institution?.name || '—')}</td><td>${escapeHtml(personName(item.accompanimentResponsible))}</td><td>${statusPill(item.status)}</td></tr>`);
-            pageContent(id, titles[id], table(['Estudiante', 'Práctica', 'Institución', 'Asesor', 'Estado'], rows, 'No hay estudiantes en práctica para tus programas.'));
+            const academicStudents = dashboard.practiceOptions.academicStudents || [];
+            const rows = listRows(academicStudents, student => {
+                const subjects = student.subjects || [];
+                const subjectNames = subjects.map(subject => subject.name).join(', ') || 'Sin asignaturas';
+                const teachers = student.assignedTeachers || [];
+                const teacherNames = teachers.map(personName).join(', ') || 'Sin docente asignado';
+                const assignment = dashboard.assignments.find(item => String(item.student?._id) === String(student._id));
+                const practice = assignment
+                    ? `${assignmentName(assignment)} · ${assignment.institution?.name || 'Sin institución'}`
+                    : 'Sin práctica asignada';
+                return `<tr><td>${escapeHtml(personName(student))}<small>${escapeHtml(student.email || '')}</small></td><td>${escapeHtml(student.semester)}</td><td>${escapeHtml(subjectNames)}</td><td>${escapeHtml(teacherNames)}</td><td>${escapeHtml(practice)}</td></tr>`;
+            });
+            const content = dashboard.practiceOptionsError
+                ? `<p class="rp-empty">No se pudieron cargar los estudiantes: ${escapeHtml(dashboard.practiceOptionsError)}</p>`
+                : table(['Estudiante', 'Semestre', 'Asignaturas', 'Docentes', 'Práctica'], rows, 'No hay estudiantes activos asignados a tu programa y semestre.');
+            pageContent(id, titles[id], content);
         } else if (id === 'horas') {
             const rows = listRows(dashboard.logs, item => `<tr><td>${escapeHtml(personName(item.student))}</td><td>${escapeHtml(dateText(item.date))}</td><td>${escapeHtml(item.hours)}</td><td>${escapeHtml(item.activityDescription)}</td><td>${statusPill(item.status)}</td></tr>`);
-            pageContent(id, titles[id], table(['Estudiante', 'Fecha', 'Horas', 'Actividad', 'Validación'], rows, 'No hay horas registradas.'));
+            const approvalRows = listRows(dashboard.assignments, item => {
+                const decision = item.approvalStatus === 'pendiente'
+                    ? `<form class="rp-approval" data-assignment="${item._id}"><input name="approvalComment" maxlength="2000" placeholder="Comentario"><button name="approvalStatus" value="aprobada">Aprobar</button><button name="approvalStatus" value="rechazada">Rechazar</button></form>`
+                    : item.approvalStatus === 'aprobada'
+                        ? `<form class="rp-approval" data-assignment="${item._id}"><button name="approvalStatus" value="pendiente" title="Quitar la aprobación y volver a pendiente">Cancelar aprobación</button></form>`
+                        : '—';
+                return `<tr><td>${escapeHtml(assignmentName(item))}</td><td>${escapeHtml(assignmentStudent(item))}</td><td>${escapeHtml(item.institution?.name || '—')}</td><td>${escapeHtml(item.requiredHours || item.practiceType?.requiredHours || 0)}</td><td>${statusPill(item.approvalStatus)}</td><td>${decision}</td></tr>`;
+            });
+            pageContent(id, titles[id], `<h3>Prácticas por aprobar</h3>${table(['Práctica', 'Estudiante', 'Institución', 'Horas requeridas', 'Estado', 'Decisión'], approvalRows, 'No hay prácticas pendientes de decisión.') }<h3>Horas registradas</h3>${table(['Estudiante', 'Fecha', 'Horas', 'Actividad', 'Validación'], rows, 'No hay horas registradas.')}`);
         } else if (id === 'evaluaciones') {
             const rows = listRows(dashboard.evaluations, item => `<tr><td>${escapeHtml(personName(item.student))}</td><td>${escapeHtml(item.score)} / 5</td><td>${escapeHtml(item.feedback)}</td><td>${escapeHtml(personName(item.evaluator))}</td><td>${escapeHtml(dateText(item.evaluatedAt))}</td></tr>`);
             pageContent(id, titles[id], table(['Estudiante', 'Nota', 'Retroalimentación', 'Evaluador', 'Fecha'], rows, 'No hay evaluaciones disponibles.'));
-        } else if (id === 'informes' || id === 'comparar') {
-            const metrics = dashboard.metrics;
-            const byPractice = new Map();
-            dashboard.assignments.forEach(item => byPractice.set(assignmentName(item), (byPractice.get(assignmentName(item)) || 0) + 1));
-            const rows = [...byPractice].map(([name, count]) => `<tr><td>${escapeHtml(name)}</td><td>${count}</td><td>${escapeHtml(metrics.hoursPercent)}%</td></tr>`).join('');
-            pageContent(id, titles[id], `<div class="rp-metrics">${value('Prácticas', metrics.assignments)}${value('En curso', metrics.activeAssignments)}${value('Estudiantes', metrics.students)}${value('Horas aprobadas', metrics.approvedHours)}${value('Cumplimiento', `${metrics.hoursPercent}%`)}${value('Pendientes de aprobación', metrics.pendingApprovals)}${value('Promedio de evaluación', metrics.averageScore ?? 'Sin datos')}</div>${table(['Tipo de práctica', 'Asignaciones', 'Cumplimiento de horas'], rows, 'Sin registros para elaborar el informe.')}`);
         }
     }
 
@@ -256,8 +347,17 @@
             else document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else {
             document.querySelectorAll('main section[id]').forEach(section => section.classList.toggle('activa', section.id === id));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-        document.querySelectorAll('[data-vista]').forEach(item => item.classList.toggle('activa', item.dataset.vista === id));
+        document.querySelectorAll('[data-vista]').forEach(item => {
+            const active = item.dataset.vista === id;
+            item.classList.toggle('activa', active);
+            item.classList.toggle('activo', active);
+        });
+        const routeTitle = document.getElementById('titulo-ruta');
+        if (routeTitle) {
+            routeTitle.textContent = titles[id]?.[0] || (['perfil', 'mi-perfil'].includes(id) ? 'Mi perfil' : 'Inicio');
+        }
         document.querySelector('.menu-lateral-asesor, .barra-lateral')?.classList.remove('abierto', 'abierta');
     }
     const currentView = () => document.querySelector('main section.rp-page.activa')?.id || 'inicio';
@@ -355,6 +455,30 @@
         }
     });
     document.addEventListener('change', event => {
+        const resourceInput = event.target.closest('.rp-resource-files');
+        if (resourceInput) {
+            const summary = resourceInput.form.querySelector('.rp-selected-resources');
+            const files = [...resourceInput.files];
+            const totalSize = files.reduce((total, file) => total + file.size, 0);
+            summary.textContent = files.length
+                ? `${files.length} archivo(s) seleccionados · ${(totalSize / (1024 * 1024)).toFixed(2)} MB`
+                : '';
+            return;
+        }
+        const practiceStudentSelect = event.target.closest('.rp-practice-form select[name="student"]');
+        if (practiceStudentSelect) {
+            const semester = practiceStudentSelect.selectedOptions[0]?.dataset.semester || '';
+            const institutionSelect = practiceStudentSelect.form.elements.institution;
+            institutionSelect.disabled = !semester;
+            [...institutionSelect.options].forEach(option => {
+                if (!option.value) return;
+                const compatible = Boolean(semester) && option.dataset.semesters.split(',').includes(semester);
+                option.hidden = !compatible;
+                option.disabled = !compatible;
+                if (!compatible && option.selected) institutionSelect.value = '';
+            });
+            return;
+        }
         const assignmentSelect = event.target.closest('.rp-form[data-workflow-form="evaluation"] select[name="assignment"]');
         if (!assignmentSelect) return;
         const studentSelect = assignmentSelect.form.elements.student;
@@ -367,24 +491,40 @@
         if (!(target instanceof HTMLFormElement)) return;
         if (target.matches('.rp-form')) {
             event.preventDefault();
-            const fields = Object.fromEntries(new FormData(target).entries());
+            const formData = new FormData(target);
+            const fields = Object.fromEntries([...formData.entries()].filter(([name]) => name !== 'resources'));
             try {
                 const activeView = currentView();
+                if (target.dataset.workflowForm === 'activity') {
+                    const files = formData.getAll('resources').filter(file => file instanceof File && file.size);
+                    const totalSize = files.reduce((total, file) => total + file.size, 0);
+                    if (files.length > 5 || totalSize > 20 * 1024 * 1024) {
+                        throw new Error('Puedes adjuntar hasta 5 archivos y 20 MB en total.');
+                    }
+                    const upload = new FormData();
+                    Object.entries(fields).forEach(([name, value]) => upload.append(name, value));
+                    files.forEach(file => upload.append('resources', file, file.name));
+                    await api(endpoints.activity, { method: 'POST', body: upload });
+                    await loadDashboard();
+                    render(activeView);
+                    notify('La actividad y sus recursos se publicaron correctamente.');
+                    return;
+                }
                 if (target.dataset.workflowForm === 'submission') {
                     const evidence = fields.evidenceUrl
                         ? [{ name: fields.evidenceName || 'Evidencia', url: fields.evidenceUrl }]
                         : [];
                     const submission = { activity: fields.activity, response: fields.response || '', evidence };
                     await api(endpoints.submission, { method: 'POST', body: JSON.stringify(submission) });
-                    dashboard = (await api('/api/workflow/dashboard')).data;
+                    await loadDashboard();
                     render(activeView);
-                    notify('La entrega se guardó correctamente en MongoDB.');
+                    notify('La entrega se guardó correctamente en Oracle Database.');
                     return;
                 }
                 await api(endpoints[target.dataset.workflowForm], { method: 'POST', body: JSON.stringify(fields) });
-                dashboard = (await api('/api/workflow/dashboard')).data;
+                await loadDashboard();
                 render(activeView);
-                notify('El registro se guardó correctamente en MongoDB.');
+                notify('El registro se guardó correctamente en Oracle Database.');
             } catch (error) {
                 notify(error.message);
             }
@@ -394,7 +534,7 @@
             try {
                 const activeView = currentView();
                 await api(`/api/workflow/submissions/${target.dataset.submission}/review`, { method: 'PATCH', body: JSON.stringify(fields) });
-                dashboard = (await api('/api/workflow/dashboard')).data;
+                await loadDashboard();
                 render(activeView);
                 notify('La revisión se guardó correctamente.');
             } catch (error) { notify(error.message); }
@@ -404,7 +544,7 @@
             try {
                 const activeView = currentView();
                 await api(`/api/workflow/logs/${target.dataset.log}/review`, { method: 'PATCH', body: JSON.stringify(fields) });
-                dashboard = (await api('/api/workflow/dashboard')).data;
+                await loadDashboard();
                 render(activeView);
                 notify('La validación de horas se guardó correctamente.');
             } catch (error) { notify(error.message); }
@@ -413,20 +553,27 @@
             const submitter = event.submitter;
             const fields = Object.fromEntries(new FormData(target).entries());
             fields.approvalStatus = submitter?.value;
+            if (fields.approvalStatus === 'pendiente' &&
+                !window.confirm('¿Quieres quitar la aprobación y devolver esta práctica a pendiente?')) return;
             try {
                 const activeView = currentView();
                 await api(`/api/workflow/assignments/${target.dataset.assignment}/approval`, { method: 'PATCH', body: JSON.stringify(fields) });
-                dashboard = (await api('/api/workflow/dashboard')).data;
+                await loadDashboard();
                 render(activeView);
                 notify('La decisión sobre la práctica se guardó correctamente.');
             } catch (error) { notify(error.message); }
         }
     }, true);
 
-    api('/api/workflow/dashboard')
-        .then(result => {
-            dashboard = result.data;
+    loadDashboard()
+        .then(() => {
             render();
+            if (dashboard.practiceOptionsError) {
+                notify(`No fue posible cargar las opciones académicas: ${dashboard.practiceOptionsError}`);
+            }
         })
-        .catch(error => notify(`No fue posible cargar los datos desde MongoDB: ${error.message}`));
+        .catch(error => {
+            pageContent('inicio', ['No se pudo cargar el tablero', 'La información real no está disponible.'], `<p class="rp-empty">${escapeHtml(error.message)}</p>`);
+            notify(`No fue posible cargar los datos desde Oracle Database: ${error.message}`);
+        });
 })();

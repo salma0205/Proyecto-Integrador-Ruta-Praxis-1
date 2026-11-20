@@ -83,3 +83,4 @@
 .lista-seleccion-asignatura label:has(input:checked) { border-color:rgba(125,220,255,.3); background:rgba(125,220,255,.13); }
 .lista-seleccion-asignatura input[type="checkbox"] { width:16px; min-height:16px; flex:0 0 16px; margin:0; padding:0; accent-color:#7ddcff; }
 .sin-usuarios-asignatura { padding:9px 8px; color:rgba(240,248,255,.7); font-size:12px; font-weight:500; }
+.seguimiento-admin { grid-template-columns: minmax(0, 1fr); }

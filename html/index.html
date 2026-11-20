@@ -35,7 +35,7 @@
             <h1>Bienvenidos a la ruta praxis</h1>
             <!-- Titulo principal de bienvenida. -->
 
-            <form class="formulario-login" id="formulario-login" autocomplete="off" hidden>
+            <form class="formulario-login" id="formulario-login" autocomplete="off">
                 <!-- Formulario que agrupa los campos de acceso y envia a la pagina del estudiante. -->
 
                 <div class="campo">
@@ -100,6 +100,7 @@
 
                 <button type="submit">Acceder al sistema</button>
                 <button id="abrir-recuperacion" type="button" class="enlace-recuperacion">¿Olvidaste tu usuario o contraseña?</button>
+                <button id="abrir-configuracion-administrador" type="button" class="enlace-recuperacion" hidden>Crear administrador inicial</button>
             </form>
             <p id="mensaje-autenticacion" role="alert" aria-live="polite"></p>
             <dialog id="dialogo-recuperacion" class="dialogo-recuperacion">
@@ -140,6 +141,7 @@
                     <div class="campo"><input name="password" type="password" autocomplete="off" minlength="1" maxlength="10" placeholder="Contraseña (de 1 a 10 caracteres)" required></div>
                     <button type="submit">Crear administrador inicial</button>
                 </form>
+                <button id="volver-login" type="button" class="enlace-recuperacion">Volver al inicio de sesión</button>
             </section>
             <!-- Cierra el formulario. -->
         </section>
@@ -147,7 +149,7 @@
     </main>
     <!-- Cierra el contenedor principal de la pagina. -->
 
-    <script src="../js/auth.js?v=6"></script>
+    <script src="../js/auth.js?v=7"></script>
     <script src="../js/interacciones.js"></script>
 </body>
 <!-- Cierra el cuerpo del documento. -->

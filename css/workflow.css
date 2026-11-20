@@ -25,6 +25,9 @@
 .rp-form textarea { min-height: 86px; resize: vertical; }
 .rp-form option,.rp-review option,.rp-review-log option { color: #eef9ff; background: #0a2035; }
 .rp-form button,.rp-review button,.rp-review-log button,.rp-approval button { width: fit-content; min-height: 38px; padding: 8px 13px; border: 0; border-radius: 6px; color: #071827; background: #7ddcff; font-size: 13px; font-weight: 700; }
+.rp-activity-resources { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.rp-activity-resources a { color: #7ddcff; font-size: 13px; text-decoration: underline; }
+.rp-resource-help,.rp-selected-resources { color: rgba(240,248,255,.7); font-size: 12px; }
 .rp-review,.rp-review-log,.rp-approval { display: grid; min-width: 170px; gap: 7px; }
 .rp-approval { grid-template-columns: repeat(2,minmax(0,1fr)); }
 .rp-approval input { grid-column: 1/-1; }

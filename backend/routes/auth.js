@@ -1,4 +1,3 @@
-const crypto = require('node:crypto');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
@@ -58,7 +57,6 @@ router.get('/setup-status', async (req, res, next) => {
 });
 
 router.post('/setup', authLimiter, async (req, res, next) => {
-    let lockId;
     try {
         const { firstName, lastName, username, password } = req.body || {};
         const normalizedUsername = cleanText(username).toLowerCase();
@@ -70,8 +68,6 @@ router.post('/setup', authLimiter, async (req, res, next) => {
             return res.status(409).json({ error: 'El administrador inicial ya fue configurado.' });
         }
 
-        lockId = crypto.randomUUID();
-        await User.db.collection('setupLocks').insertOne({ _id: 'initial-admin', lockId, createdAt: new Date() });
         const passwordHash = await bcrypt.hash(password, 12);
         const user = await User.create({
             firstName: cleanText(firstName),
@@ -83,13 +79,6 @@ router.post('/setup', authLimiter, async (req, res, next) => {
         setSessionCookie(res, user, req);
         res.status(201).json({ data: publicUser(user) });
     } catch (error) {
-        if (lockId) {
-            try {
-                await User.db.collection('setupLocks').deleteOne({ _id: 'initial-admin', lockId });
-            } catch (cleanupError) {
-                console.error('No fue posible liberar el bloqueo de configuración inicial:', cleanupError.message);
-            }
-        }
         if (error.code === 11000) {
             return res.status(409).json({ error: 'El administrador inicial ya fue configurado o el nombre de usuario ya está registrado.' });
         }
@@ -152,7 +141,8 @@ router.post('/login', authLimiter, async (req, res, next) => {
 
 router.patch('/profile', requireAuth, async (req, res, next) => {
     try {
-        const { personalEmail = '', phone = '', profilePhoto = '' } = req.body || {};
+        const { personalEmail = '', phone = '' } = req.body || {};
+        const profilePhoto = req.body?.profilePhoto;
         if (typeof personalEmail !== 'string' ||
             (personalEmail && (personalEmail.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalEmail.trim())))) {
             return res.status(400).json({ error: 'Escribe un correo personal válido.' });
@@ -160,8 +150,8 @@ router.patch('/profile', requireAuth, async (req, res, next) => {
         if (typeof phone !== 'string' || phone.trim().length > 30) {
             return res.status(400).json({ error: 'El teléfono no puede superar 30 caracteres.' });
         }
-        if (typeof profilePhoto !== 'string' || profilePhoto.length > 7000000 ||
-            (profilePhoto && !/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(profilePhoto))) {
+        if (profilePhoto !== undefined && (typeof profilePhoto !== 'string' || profilePhoto.length > 7000000 ||
+            (profilePhoto && !/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(profilePhoto)))) {
             return res.status(400).json({ error: 'La foto debe ser JPG, PNG o WEBP y no superar 5 MB.' });
         }
         if (profilePhoto) {
@@ -171,13 +161,18 @@ router.patch('/profile', requireAuth, async (req, res, next) => {
             }
         }
 
-        const user = await User.findByIdAndUpdate(req.user.id, {
-            personalEmail: personalEmail.trim(),
-            phone: phone.trim(),
-            profilePhoto
-        }, { new: true, runValidators: true }).select('+profilePhoto');
+        const user = await User.findById(req.user.id).select('+profilePhoto');
         if (!user) return res.status(404).json({ error: 'No se encontró el perfil de usuario.' });
-        res.json({ data: publicUser(user) });
+        const currentPhoto = user.profilePhoto || '';
+        const changes = {
+            personalEmail: personalEmail.trim(),
+            phone: phone.trim()
+        };
+        if (profilePhoto !== undefined && profilePhoto !== currentPhoto) changes.profilePhoto = profilePhoto;
+        const updatedUser = await User.updateById(user.id, changes);
+        if (!updatedUser) return res.status(404).json({ error: 'No se encontró el perfil de usuario.' });
+        updatedUser.profilePhoto = profilePhoto === undefined ? currentPhoto : profilePhoto;
+        res.json({ data: publicUser(updatedUser) });
     } catch (error) {
         next(error);
     }

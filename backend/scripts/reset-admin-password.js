@@ -2,7 +2,7 @@ require('dotenv').config({ path: require('node:path').resolve(__dirname, '../../
 
 const readline = require('node:readline/promises');
 const bcrypt = require('bcryptjs');
-const mongoose = require('mongoose');
+const database = require('../config/database');
 const { User } = require('../models');
 const { isValidPassword } = require('../utils/password');
 
@@ -60,14 +60,14 @@ function askHidden(prompt) {
 }
 
 async function main() {
-    if (!process.env.MONGODB_URI) {
-        throw new Error('No se encontró MONGODB_URI en el archivo .env de la raíz del proyecto.');
+    if (!process.env.ORACLE_USER || !process.env.ORACLE_PASSWORD) {
+        throw new Error('Configura ORACLE_USER y ORACLE_PASSWORD en el archivo .env de la raíz del proyecto.');
     }
 
     try {
-        await mongoose.connect(process.env.MONGODB_URI);
+        await database.connectDatabase();
     } catch {
-        throw new Error('No se pudo conectar a MongoDB. Verifica MONGODB_URI y que Atlas permita tu IP actual.');
+        throw new Error('No se pudo conectar a Oracle Database. Verifica la configuración local de Oracle XE.');
     }
 
     const administrators = await User.find({ role: 'administrador' })
@@ -124,7 +124,5 @@ main()
         process.exitCode = 1;
     })
     .finally(async () => {
-        if (mongoose.connection.readyState !== 0) {
-            await mongoose.disconnect();
-        }
+        await database.closeDatabase();
     });

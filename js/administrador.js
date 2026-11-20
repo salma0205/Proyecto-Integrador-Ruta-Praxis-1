@@ -8,8 +8,6 @@ let elementoEditado = null;
 let asignaturasDisponibles = [];
 let programasDisponibles = [];
 let institucionesDisponibles = [];
-let tiposPracticaDisponibles = [];
-let asignacionesDisponibles = [];
 let paginaUsuarios = 1;
 const tamanoPaginaUsuarios = 10;
 let consultaUsuariosActiva = 0;
@@ -37,9 +35,7 @@ campo('form-programa').addEventListener('submit', async evento => {
     const form = evento.currentTarget;
     const id = form.dataset.editar || '';
     const data = {
-        name: campo('programa-nombre').value.trim(),
-        director: campo('programa-director').value || null,
-        teachers: valoresSeleccionados(campo('programa-docentes'))
+        name: campo('programa-nombre').value.trim()
     };
     if (!data.name) {
         avisoAdmin('Escribe el nombre del programa.', true);
@@ -85,8 +81,18 @@ function mapearUsuarioAdmin(usuario) {
         programa: usuario.programId?.name || usuario.program || '',
         asignaturas: (usuario.subjects || []).map(asignatura => ({
             id: asignatura._id,
-            nombre: asignatura.name
+            nombre: asignatura.name,
+            semestre: asignatura.semester
         })),
+        docentesAsignados: (usuario.assignedTeachers || []).map(docente => ({
+            id: docente._id,
+            nombre: `${docente.firstName} ${docente.lastName}`,
+            activo: docente.active
+        })),
+        directorAsignado: usuario.assignedDirectors?.[0]?._id || '',
+        directorAsignadoNombre: usuario.assignedDirectors?.[0]
+            ? `${usuario.assignedDirectors[0].firstName} ${usuario.assignedDirectors[0].lastName}`
+            : '',
         programId: usuario.programId?._id || usuario.programId || '',
         rol: rolesUsuario[usuario.role] || usuario.role,
         semestre: usuario.semester ? [String(usuario.semester)] : [],
@@ -124,10 +130,8 @@ async function cargarUsuariosDesdeApi() {
     paginaUsuarios = 1;
     await renderUsuarios();
     actualizarResumenAdministrador();
-    llenarDirectores(campo('programa-director')?.value || '');
-    llenarUsuariosPorRol('programa-docentes', 'Docente', valoresSeleccionados(campo('programa-docentes')));
-    llenarUsuariosPorRol('campo-docentes-asignatura', 'Docente', valoresSeleccionados(campo('campo-docentes-asignatura')));
-    llenarUsuariosPorRol('campo-estudiantes-asignatura', 'Estudiante', valoresSeleccionados(campo('campo-estudiantes-asignatura')), campo('campo-semestre')?.value);
+    llenarAsignaturasUsuario(valoresSeleccionados(campo('usuario-asignaturas')));
+    llenarAsignacionesEstudiante();
 }
 
 function avisoAdmin(mensaje, esError = false) {
@@ -226,15 +230,6 @@ function configurarGrupo(id, visible, requerido = false) {
     if (control) control.required = visible && requerido;
 }
 
-function actualizarOpcionesEstado(opciones, seleccionado) {
-    const selector = campo('campo-estado-registro');
-    selector.innerHTML = opciones.map(opcion => `<option ${opcion === seleccionado ? 'selected' : ''}>${opcion}</option>`).join('');
-}
-
-function obtenerInstitucionesRegistradas() {
-    return institucionesDisponibles.filter(institucion => institucion.active);
-}
-
 function obtenerAsignaturasRegistradas() {
     return asignaturasDisponibles.filter(asignatura => asignatura.active);
 }
@@ -253,18 +248,16 @@ async function cargarProgramasDesdeApi() {
     await renderUsuarios();
     const lista = campo('lista-programas');
     lista.innerHTML = programasDisponibles.map(programa => {
-        const directorName = programa.director
-            ? `${programa.director.firstName} ${programa.director.lastName}`
+        const directors = programa.directors?.length
+            ? programa.directors
+            : (programa.director ? [programa.director] : []);
+        const directorNames = directors.length
+            ? directors.map(director => `${director.firstName} ${director.lastName}`).join(', ')
             : 'Sin director asignado';
-        const teacherIds = (programa.teachers || []).map(teacher => teacher._id || teacher).join(',');
-        const teacherNames = (programa.teachers || [])
-            .map(teacher => `${teacher.firstName || ''} ${teacher.lastName || ''}`.trim())
-            .filter(Boolean)
-            .join(', ') || 'Sin docentes asignados';
-        return `<article data-id="${escaparHtml(programa._id)}" data-director="${escaparHtml(programa.director?._id || '')}" data-teachers="${escaparHtml(teacherIds)}" data-estado="${programa.active ? 'Activo' : 'Inactivo'}"><span class="icono-admin"><i class="fa-solid fa-graduation-cap"></i></span><em class="estado ${programa.active ? 'listo' : 'riesgo'}">${programa.active ? 'Activo' : 'Inactivo'}</em><h3>${escaparHtml(programa.name)}</h3><p>Director: ${escaparHtml(directorName)} · Docentes: ${escaparHtml(teacherNames)}</p><footer><button class="enlace-accion editar-tarjeta" type="button" data-tipo="programa">Editar</button><button class="boton-desactivar" type="button">${programa.active ? 'Desactivar' : 'Activar'}</button></footer></article>`;
+        return `<article data-id="${escaparHtml(programa._id)}" data-director="${escaparHtml(directors[0]?._id || '')}" data-estado="${programa.active ? 'Activo' : 'Inactivo'}"><span class="icono-admin"><i class="fa-solid fa-graduation-cap"></i></span><em class="estado ${programa.active ? 'listo' : 'riesgo'}">${programa.active ? 'Activo' : 'Inactivo'}</em><h3>${escaparHtml(programa.name)}</h3><p>Directores: ${escaparHtml(directorNames)}</p><footer><button class="enlace-accion editar-tarjeta" type="button" data-tipo="programa">Editar</button><button class="boton-desactivar" type="button">${programa.active ? 'Desactivar' : 'Activar'}</button></footer></article>`;
     }).join('') || '<p class="vacio-admin">Aún no hay programas académicos registrados.</p>';
     llenarProgramas(campo('usuario-programa')?.value || '');
-    llenarDirectores(campo('programa-director')?.value || '');
+    llenarAsignacionesEstudiante();
 }
 
 async function cargarAsignaturasDesdeApi() {
@@ -276,11 +269,11 @@ async function cargarAsignaturasDesdeApi() {
         nombre: escaparHtml(asignatura.name),
         codigo: escaparHtml(asignatura.code),
         semestre: asignatura.semester || '',
-        teachers: asignatura.teachers || [],
-        students: asignatura.students || [],
         estado: asignatura.active ? 'Activa' : 'Inactiva'
     })).join('') || '<p class="vacio-admin">Aun no hay asignaturas registradas.</p>';
     actualizarResumenAdministrador();
+    llenarAsignaturasUsuario(valoresSeleccionados(campo('usuario-asignaturas')));
+    llenarAsignacionesEstudiante();
 }
 
 async function cargarInstitucionesDesdeApi() {
@@ -291,159 +284,18 @@ async function cargarInstitucionesDesdeApi() {
         nombre: escaparHtml(institucion.name),
         direccion: escaparHtml(institucion.address || ''),
         semestres: institucion.semesters || [],
-        practica: escaparHtml(institucion.practiceName || ''),
-        asesor: escaparHtml(institucion.advisorName || ''),
         estado: institucion.active ? 'Activa' : 'Inactiva'
     })).join('') || '<p class="vacio-admin">Aún no hay instituciones registradas.</p>';
-    llenarInstituciones(campo('practica-institucion')?.value || '', 'practica-institucion');
     actualizarResumenAdministrador();
 }
 
-async function cargarTiposPracticaDesdeApi() {
-    const result = await solicitarApi('/api/practiceTypes');
-    tiposPracticaDisponibles = result.data.filter(tipo => tipo.active);
-    llenarTiposPractica(campo('practica-tipo')?.value || '');
-}
-
-async function cargarPracticasDesdeApi() {
-    const result = await solicitarApi('/api/assignments');
-    asignacionesDisponibles = result.data;
-    campo('tabla-practicas-admin').innerHTML = result.data.map(asignacion => crearFila('practica', {
-        id: asignacion._id,
-        practiceTypeId: asignacion.practiceType?._id || asignacion.practiceType,
-        practiceType: asignacion.practiceType?.name || 'Práctica',
-        institutionId: asignacion.institution?._id || asignacion.institution,
-        institucion: asignacion.institution?.name || 'Sin institución',
-        estudianteId: asignacion.student?._id || asignacion.student,
-        estudiante: asignacion.student ? nombreUsuarioApi(asignacion.student) : 'Sin estudiante',
-        docenteId: asignacion.teacher?._id || asignacion.teacher,
-        docente: asignacion.teacher ? nombreUsuarioApi(asignacion.teacher) : 'Sin docente',
-        asesorId: asignacion.accompanimentResponsible?._id || asignacion.accompanimentResponsible || '',
-        asesor: asignacion.accompanimentResponsible ? nombreUsuarioApi(asignacion.accompanimentResponsible) : 'Sin asesor',
-        fechaCreacion: fechaParaFormulario(asignacion.startDate),
-        fechaLimite: fechaParaFormulario(asignacion.endDate),
-        estado: estadoPracticaEtiqueta(asignacion.status)
-    })).join('') || '<tr><td colspan="7" class="vacio-tabla">No hay prácticas registradas aún.</td></tr>';
-    actualizarResumenAdministrador();
-}
-
-function nombreUsuarioApi(usuario) {
-    return [usuario.firstName, usuario.middleName, usuario.lastName, usuario.secondLastName].filter(Boolean).join(' ');
-}
-
-function fechaParaFormulario(fecha) {
-    return fecha ? new Date(fecha).toISOString().slice(0, 10) : '';
-}
-
-function estadoPracticaEtiqueta(estado) {
-    return ({ disponible: 'Disponible', en_curso: 'En curso', finalizada: 'Finalizada', cancelada: 'Cancelada' })[estado] || estado || 'Disponible';
-}
-
-function estadoPracticaApi(estado) {
-    return ({ Disponible: 'disponible', 'En curso': 'en_curso', Finalizada: 'finalizada', Cancelada: 'cancelada' })[estado] || 'disponible';
-}
-
-function llenarTiposPractica() {
-    const opciones = campo('lista-tipos-practica');
-    if (!opciones) return;
-    opciones.replaceChildren(...tiposPracticaDisponibles.map(tipo => new Option(tipo.name, tipo.name)));
-}
-
-function llenarInstituciones(seleccionada = '', id = 'campo-institucion') {
-    const selector = campo(id);
-    if (!selector) return;
-    selector.replaceChildren(new Option('Selecciona una institución', ''));
-    obtenerInstitucionesRegistradas().forEach(institucion => {
-        selector.add(new Option(institucion.name, institucion._id, false, String(institucion._id) === String(seleccionada)));
-    });
-}
-
-function llenarProgramas(seleccionada = '') {
-    const selector = campo('usuario-programa');
+function llenarProgramas(seleccionada = '', selectorId = 'usuario-programa') {
+    const selector = campo(selectorId);
     if (!selector) return;
     selector.replaceChildren(new Option('Selecciona un programa registrado', ''));
     programasDisponibles.filter(programa => programa.active).forEach(programa => {
         selector.add(new Option(programa.name, programa._id, false, String(programa._id) === String(seleccionada)));
     });
-}
-
-function llenarDirectores(seleccionado = '') {
-    const selector = campo('programa-director');
-    if (!selector) return;
-    selector.replaceChildren(new Option('Sin director por ahora', ''));
-    estadoAdmin.usuarios.filter(usuario => usuario.rol === 'Director' && (usuario.activo || String(usuario.id) === String(seleccionado)))
-        .forEach(usuario => selector.add(new Option(usuario.nombre, usuario.id, false, String(usuario.id) === String(seleccionado))));
-}
-
-function llenarUsuariosPorRol(selectorId, rol, seleccionados = [], semestreAsignatura = '') {
-    const selector = campo(selectorId);
-    if (!selector) return;
-    const ids = new Set((Array.isArray(seleccionados) ? seleccionados : [seleccionados]).map(String).filter(Boolean));
-    const usuarios = estadoAdmin.usuarios
-        .filter(usuario => usuario.rol === rol && (usuario.activo !== false || ids.has(String(usuario.id))) &&
-            (rol !== 'Estudiante' || !semestreAsignatura || String(usuario.semestre?.[0] || '') === String(semestreAsignatura)));
-    if (selector.matches('.lista-seleccion-asignatura')) {
-        if (!usuarios.length) {
-            const empty = document.createElement('p');
-            empty.className = 'sin-usuarios-asignatura';
-            empty.textContent = rol === 'Estudiante' && semestreAsignatura
-                ? `No hay estudiantes activos del semestre ${semestreAsignatura}.`
-                : `No hay usuarios activos con rol ${rol}.`;
-            selector.replaceChildren(empty);
-            return;
-        }
-        selector.replaceChildren(...usuarios.map(usuario => {
-            const etiqueta = document.createElement('label');
-            const checkbox = document.createElement('input');
-            const nombre = document.createElement('span');
-            checkbox.type = 'checkbox';
-            checkbox.value = usuario.id;
-            checkbox.checked = ids.has(String(usuario.id));
-            nombre.textContent = usuario.nombre;
-            etiqueta.append(checkbox, nombre);
-            return etiqueta;
-        }));
-        return;
-    }
-    const opciones = usuarios.map(usuario => new Option(usuario.nombre, usuario.id, false, ids.has(String(usuario.id))));
-    if (!opciones.length) {
-        const empty = new Option(`Primero crea usuarios con rol ${rol}`, '');
-        empty.disabled = true;
-        selector.replaceChildren(empty);
-        return;
-    }
-    selector.replaceChildren(...opciones);
-}
-
-
-function obtenerAsesoresRegistrados() {
-    return estadoAdmin.usuarios
-        .filter(usuario => usuario.rol === 'Asesor' && usuario.activo !== false)
-        .map(usuario => usuario.nombre)
-        .filter(Boolean);
-}
-
-function obtenerDocentesRegistrados() {
-    const docentes = estadoAdmin.usuarios
-        .filter(usuario => usuario.rol === 'Docente' && usuario.activo !== false)
-        .map(usuario => usuario.nombre)
-        .filter(Boolean);
-    return docentes.length ? docentes : ['Primero crea un docente'];
-}
-
-function obtenerEstudiantesRegistrados() {
-    const estudiantes = estadoAdmin.usuarios
-        .filter(usuario => usuario.rol === 'Estudiante' && usuario.activo !== false)
-        .map(usuario => usuario.nombre)
-        .filter(Boolean);
-    return estudiantes.length ? estudiantes : ['Primero crea un estudiante'];
-}
-
-function llenarOpciones(selectorId, opciones, seleccionada = '') {
-    const selector = campo(selectorId);
-    if (!selector) return;
-    selector.replaceChildren(new Option('Sin asesor asignado', ''));
-    opciones.forEach(opcion => selector.add(new Option(opcion, opcion, false, opcion === seleccionada)));
 }
 
 function generarCodigoAsignatura() {
@@ -462,10 +314,85 @@ function generarCodigoAsignatura() {
 }
 
 function valoresSeleccionados(selector) {
+    if (!selector) return [];
     if (selector.matches('.lista-seleccion-asignatura')) {
         return Array.from(selector.querySelectorAll('input[type="checkbox"]:checked'), checkbox => checkbox.value);
     }
-    return Array.from(selector.selectedOptions).map(opcion => opcion.value);
+    return Array.from(selector.selectedOptions, opcion => opcion.value).filter(Boolean);
+}
+
+function llenarAsignaturasUsuario(seleccionadas = []) {
+    const grupo = campo('grupo-asignaturas-usuario');
+    const selector = campo('usuario-asignaturas');
+    if (!grupo || !selector) return;
+    const rol = campo('usuario-rol').value;
+    const puedeAsignarAsignaturas = ['Docente', 'Estudiante'].includes(rol);
+    grupo.hidden = !puedeAsignarAsignaturas;
+    if (!puedeAsignarAsignaturas) {
+        selector.replaceChildren();
+        return;
+    }
+
+    const semestre = rol === 'Estudiante' ? semestresSeleccionados()[0] || '' : '';
+    const ids = new Set((Array.isArray(seleccionadas) ? seleccionadas : [seleccionadas]).map(String));
+    if (rol === 'Estudiante' && !semestre) {
+        selector.replaceChildren(new Option('Selecciona primero el semestre', '', true, true));
+        selector.options[0].disabled = true;
+        campo('ayuda-asignaturas-usuario').textContent = 'Selecciona el semestre para mostrar las asignaturas disponibles.';
+        return;
+    }
+
+    const disponibles = asignaturasDisponibles.filter(asignatura =>
+        (rol === 'Docente' || String(asignatura.semester) === String(semestre)) &&
+        (asignatura.active || ids.has(String(asignatura._id)))
+    );
+    if (!disponibles.length) {
+        selector.replaceChildren(new Option(
+            rol === 'Docente' ? 'No hay asignaturas activas' : `No hay asignaturas del semestre ${semestre}`,
+            '',
+            true,
+            true
+        ));
+        selector.options[0].disabled = true;
+    } else {
+        selector.replaceChildren(...disponibles.map(asignatura =>
+            new Option(
+                rol === 'Docente' ? `${asignatura.name} · Semestre ${asignatura.semester}` : asignatura.name,
+                asignatura._id,
+                false,
+                ids.has(String(asignatura._id))
+            )
+        ));
+    }
+    campo('ayuda-asignaturas-usuario').textContent = rol === 'Docente'
+        ? 'El Docente puede tener asignaturas de uno o varios semestres.'
+        : `Selecciona asignaturas activas del semestre ${semestre}.`;
+}
+
+function llenarAsignacionesEstudiante(docentesSeleccionados) {
+    const grupoDocentes = campo('grupo-docentes-estudiante');
+    if (!grupoDocentes) return;
+    const esEstudiante = campo('usuario-rol').value === 'Estudiante';
+    grupoDocentes.hidden = !esEstudiante;
+    campo('usuario-docentes').required = esEstudiante;
+    if (!esEstudiante) {
+        campo('usuario-docentes').replaceChildren();
+        return;
+    }
+
+    const teacherIds = new Set((docentesSeleccionados || valoresSeleccionados(campo('usuario-docentes'))).map(String));
+    const semester = semestresSeleccionados()[0] || '';
+    const teachers = estadoAdmin.usuarios.filter(user =>
+        user.rol === 'Docente' &&
+        user.activo &&
+        user.asignaturas.some(subject => String(subject.semestre) === String(semester))
+    );
+    campo('usuario-docentes').replaceChildren(...(
+        teachers.length
+            ? teachers.map(teacher => new Option(teacher.nombre, teacher.id, false, teacherIds.has(String(teacher.id))))
+            : [new Option(semester ? `No hay docentes activos con asignaturas del semestre ${semester}` : 'Selecciona primero el semestre', '')]
+    ));
+    if (!teachers.length) campo('usuario-docentes').options[0].disabled = true;
 }
 
 function seleccionarValores(selector, valores) {
@@ -487,14 +414,13 @@ function seleccionarSemestres(valores) {
 }
 
 function semestresInstitucionSeleccionados() {
-    return Array.from(document.querySelectorAll('#institucion-semestres input:checked')).map(campo => campo.value);
+    const semestre = campo('institucion-semestre').value;
+    return semestre ? [semestre] : [];
 }
 
 function seleccionarSemestresInstitucion(valores) {
     const lista = Array.isArray(valores) ? valores : [valores].filter(Boolean);
-    document.querySelectorAll('#institucion-semestres input').forEach(campo => {
-        campo.checked = lista.includes(campo.value);
-    });
+    campo('institucion-semestre').value = lista.length ? String(lista[0]) : '';
 }
 
 function actualizarResumenAdministrador() {
@@ -502,18 +428,15 @@ function actualizarResumenAdministrador() {
     const totalUsuarios = estadoAdmin.usuarios.length;
     const asignaturasActivas = asignaturasDisponibles.filter(asignatura => asignatura.active).length;
     const institucionesActivas = institucionesDisponibles.filter(institucion => institucion.active).length;
-    const practicasEnCurso = asignacionesDisponibles.filter(asignacion => asignacion.status === 'en_curso').length;
     document.getElementById('dato-usuarios').textContent = usuariosActivos;
     document.getElementById('dato-asignaturas').textContent = asignaturasActivas;
     document.getElementById('dato-instituciones').textContent = institucionesActivas;
-    document.getElementById('dato-practicas').textContent = practicasEnCurso;
     document.getElementById('porcentaje-usuarios').textContent = totalUsuarios
         ? `${Math.round((usuariosActivos / totalUsuarios) * 100)}%`
         : '0%';
     document.getElementById('texto-usuarios').textContent = usuariosActivos ? 'Usuarios activos' : 'Sin usuarios activos';
     document.getElementById('texto-asignaturas').textContent = asignaturasActivas ? 'Asignaturas activas' : 'Sin asignaturas activas';
     document.getElementById('texto-instituciones').textContent = institucionesActivas ? 'Instituciones activas' : 'Sin instituciones activas';
-    document.getElementById('texto-practicas').textContent = practicasEnCurso ? 'En curso' : 'Sin prácticas en curso';
 }
 
 function parametrosFiltroUsuarios() {
@@ -572,7 +495,7 @@ async function renderUsuarios() {
 
         document.getElementById('tabla-usuarios').innerHTML = usuarios.map(usuario => `
         <tr>
-            <td><strong>${escaparHtml(usuario.nombre)}</strong><small>${escaparHtml(usuario.programa || '')}${usuario.asignaturas?.length ? ` · ${escaparHtml(usuario.asignaturas.map(asignatura => asignatura.nombre).join(', '))}` : ''}</small></td>
+            <td><strong>${escaparHtml(usuario.nombre)}</strong><small>${escaparHtml(usuario.programa || '')}${usuario.asignaturas?.length ? ` · ${escaparHtml(usuario.asignaturas.map(asignatura => `${asignatura.nombre} (${asignatura.semestre})`).join(', '))}` : ''}${usuario.docentesAsignados?.length ? ` · Docentes: ${escaparHtml(usuario.docentesAsignados.map(docente => docente.nombre).join(', '))}` : ''}${usuario.directorAsignadoNombre ? ` · Director: ${escaparHtml(usuario.directorAsignadoNombre)}` : ''}</small></td>
             <td>${escaparHtml(usuario.correo || 'Sin correo')}</td>
             <td>${escaparHtml(usuario.codigo || 'Sin codigo')}</td>
             <td>${escaparHtml(usuario.rol)}</td>
@@ -616,7 +539,7 @@ async function exportarUsuariosCsv() {
         }
         const protegerFormula = valor => /^[\s]*[=+\-@]/.test(String(valor ?? '')) ? `'${valor}` : valor;
         const filas = [
-            ['Nombre', 'Correo o usuario', 'Código', 'Rol', 'Programa', 'Asignaturas', 'Semestre', 'Estado'],
+            ['Nombre', 'Correo o usuario', 'Código', 'Rol', 'Programa', 'Asignaturas', 'Docentes asignados', 'Director asignado', 'Semestre', 'Estado'],
             ...usuarios.map(usuario => [
                 usuario.nombre,
                 usuario.correo || usuario.nombreUsuario,
@@ -624,6 +547,8 @@ async function exportarUsuariosCsv() {
                 usuario.rol,
                 usuario.programa,
                 (usuario.asignaturas || []).map(asignatura => asignatura.nombre).join('; '),
+                (usuario.docentesAsignados || []).map(docente => docente.nombre).join('; '),
+                usuario.directorAsignadoNombre,
                 (usuario.semestre || []).join('; '),
                 usuario.activo ? 'Activo' : 'Inactivo'
             ])
@@ -660,12 +585,6 @@ function crearFila(tipo, registro) {
         return `<tr><td><strong>${escaparHtml(nombre)}</strong></td><td>${escaparHtml(rol)}</td><td>${escaparHtml(correo)}</td><td>${escaparHtml(extra)}</td><td>${etiquetaEstado(true)}</td><td><button class="accion-tabla editar-registro" type="button" data-tipo="personal" title="Editar"><i class="fa-solid fa-pen"></i></button></td></tr>`;
     }
 
-    if (tipo === 'practica') {
-        const estado = registro.estado || 'Disponible';
-        const claseEstado = estado === 'En curso' || estado === 'Finalizada' ? 'listo' : estado === 'Cancelada' ? 'riesgo' : 'alerta';
-        return `<tr data-id="${escaparHtml(registro.id || '')}" data-practice-type="${escaparHtml(registro.practiceTypeId || '')}" data-practice-name="${escaparHtml(registro.practiceType || '')}" data-institution="${escaparHtml(registro.institutionId || '')}" data-student="${escaparHtml(registro.estudianteId || '')}" data-teacher="${escaparHtml(registro.docenteId || '')}" data-advisor="${escaparHtml(registro.asesorId || '')}" data-start-date="${escaparHtml(registro.fechaCreacion || '')}" data-end-date="${escaparHtml(registro.fechaLimite || '')}" data-status="${escaparHtml(estado)}"><td>${escaparHtml(registro.institucion || 'Sin institucion')}<small>${escaparHtml(registro.practiceType || '')}</small></td><td><strong>${escaparHtml(registro.estudiante || 'Sin estudiante')}</strong></td><td>${escaparHtml(registro.docente || 'Sin docente')}</td><td>${escaparHtml(registro.asesor || 'Sin asesor')}</td><td><strong>${escaparHtml(registro.fechaCreacion || 'Por definir')}</strong><small>Limite: ${escaparHtml(registro.fechaLimite || 'Por definir')}</small></td><td><em class="estado ${claseEstado}">${escaparHtml(estado)}</em></td><td><button class="accion-tabla editar-registro" type="button" data-tipo="practica" title="Editar"><i class="fa-solid fa-pen"></i></button></td></tr>`;
-    }
-
     return `<tr><td><strong>${nombre}</strong><small>Registro academico</small></td><td>${extra}</td><td>Por asignar</td><td>0</td><td>Por definir</td><td><em class="estado alerta">Nueva</em></td></tr>`;
 }
 
@@ -674,19 +593,15 @@ function crearTarjeta(tipo, registro) {
     const accion = tipo === 'asignatura' ? 'Modificar' : 'Actualizar datos';
     const estado = registro.estado || 'Activa';
     const activa = estado !== 'Inactiva';
-    const nombresDocentes = (registro.teachers || []).map(usuario => `${usuario.firstName || ''} ${usuario.lastName || ''}`.trim() || usuario.nombre).filter(Boolean).join(', ') || 'Sin docentes';
-    const nombresEstudiantes = (registro.students || []).map(usuario => `${usuario.firstName || ''} ${usuario.lastName || ''}`.trim() || usuario.nombre).filter(Boolean).join(', ') || 'Sin estudiantes';
-    const idsDocentes = (registro.teachers || []).map(usuario => usuario._id || usuario.id || usuario).join(',');
-    const idsEstudiantes = (registro.students || []).map(usuario => usuario._id || usuario.id || usuario).join(',');
     const descripcion = tipo === 'asignatura'
-        ? `Codigo: ${registro.codigo || 'Sin codigo'} · Semestre: ${registro.semestre || 'Sin definir'} · Docentes: ${nombresDocentes} · Estudiantes: ${nombresEstudiantes}`
-        : `${registro.direccion || 'Direccion en Bucaramanga'} · Semestres: ${(registro.semestres || []).join(', ') || 'Sin definir'} · ${registro.practica || 'Sin practica'} · ${registro.asesor || 'Sin asesor'}`;
-    const datosAsignatura = tipo === 'asignatura'
-        ? ` data-codigo="${registro.codigo || ''}" data-semestre="${registro.semestre || ''}" data-teachers="${escaparHtml(idsDocentes)}" data-students="${escaparHtml(idsEstudiantes)}" data-estado="${estado}"`
-        : ` data-direccion="${registro.direccion || ''}" data-semestres="${(registro.semestres || []).join(',')}" data-practica="${registro.practica || ''}" data-asesor="${registro.asesor || ''}" data-estado="${estado}"`;
+        ? `Semestre: ${registro.semestre || 'Sin definir'}`
+        : `${registro.direccion || 'Dirección pendiente'} · Semestre: ${(registro.semestres || []).join(', ') || 'Sin definir'}`;
+    const datosTarjeta = tipo === 'asignatura'
+        ? ` data-codigo="${registro.codigo || ''}" data-semestre="${registro.semestre || ''}" data-estado="${estado}"`
+        : ` data-direccion="${registro.direccion || ''}" data-semestres="${(registro.semestres || []).join(',')}" data-estado="${estado}"`;
     const idRegistro = registro.id ? ` data-id="${escaparHtml(registro.id)}"` : '';
     return `
-        <article${idRegistro}${datosAsignatura}>
+        <article${idRegistro}${datosTarjeta}>
             <span class="icono-admin"><i class="fa-solid ${icono}"></i></span>
             <em class="estado ${activa ? 'listo' : 'riesgo'}">${estado}</em>
             <h3>${registro.nombre}</h3>
@@ -700,13 +615,6 @@ function crearTarjeta(tipo, registro) {
 }
 
 function agregarRegistroVisual(tipo, registro) {
-    const destinosTabla = { practica: 'tabla-practicas-admin' };
-    if (destinosTabla[tipo]) {
-        const tabla = document.getElementById(destinosTabla[tipo]);
-        if (tabla) tabla.insertAdjacentHTML('afterbegin', crearFila(tipo, registro));
-        return;
-    }
-
     const destinosTarjeta = { asignatura: 'lista-asignaturas', institucion: 'lista-instituciones' };
     if (destinosTarjeta[tipo]) {
         document.getElementById(destinosTarjeta[tipo]).insertAdjacentHTML('afterbegin', crearTarjeta(tipo, registro));
@@ -718,7 +626,6 @@ function inferirTipoDesdeElemento(elemento) {
     if (!vista) return 'usuario';
     if (vista.id === 'asignaturas') return 'asignatura';
     if (vista.id === 'instituciones') return 'institucion';
-    if (vista.id === 'practicas') return 'practica';
     return 'usuario';
 }
 
@@ -727,34 +634,6 @@ function datosDesdeElemento(elemento, tipo) {
     const tarjeta = elemento.closest('article');
     if (fila) {
         const celdas = fila.querySelectorAll('td');
-        if (tipo === 'practica') {
-            if (fila.dataset.id) {
-                return {
-                    id: fila.dataset.id,
-                    practiceTypeId: fila.dataset.practiceType,
-                    practiceType: fila.dataset.practiceName,
-                    institutionId: fila.dataset.institution,
-                    estudianteId: fila.dataset.student,
-                    docenteId: fila.dataset.teacher,
-                    asesorId: fila.dataset.advisor,
-                    fechaCreacion: fila.dataset.startDate,
-                    fechaLimite: fila.dataset.endDate,
-                    estado: fila.dataset.status
-                };
-            }
-            const fechaCelda = celdas[4] || celdas[3];
-            const fechaCreacion = fechaCelda?.querySelector('strong')?.textContent.trim() || fechaCelda?.textContent.trim() || '';
-            const fechaLimite = (fechaCelda?.querySelector('small')?.textContent || '').replace('Limite:', '').trim() || celdas[4]?.textContent.trim() || '';
-            return {
-                institucion: celdas[0]?.textContent.trim() || '',
-                estudiante: celdas[1]?.querySelector('strong')?.textContent.trim() || celdas[1]?.textContent.trim() || '',
-                docente: celdas.length === 7 ? celdas[2]?.textContent.trim() : '',
-                asesor: celdas.length === 7 ? celdas[3]?.textContent.trim() : celdas[2]?.textContent.trim() || '',
-                fechaCreacion,
-                fechaLimite,
-                estado: (celdas.length === 7 ? celdas[5] : celdas.length === 6 ? celdas[4] : celdas[5])?.textContent.trim() || 'Disponible'
-            };
-        }
         return {
             nombre: celdas[0]?.querySelector('strong')?.textContent.trim() || '',
             correo: celdas[0]?.querySelector('small')?.textContent.trim() || celdas[2]?.textContent.trim() || '',
@@ -772,8 +651,6 @@ function datosDesdeElemento(elemento, tipo) {
                 nombre: tarjeta.querySelector('h3')?.textContent.trim() || '',
                 direccion: tarjeta.dataset.direccion || '',
                 semestres: (tarjeta.dataset.semestres || '').split(',').filter(Boolean),
-                practica: tarjeta.dataset.practica || '',
-                asesor: tarjeta.dataset.asesor || '',
                 estado: tarjeta.querySelector('.estado')?.textContent.trim() || tarjeta.dataset.estado || 'Activa'
             };
         }
@@ -783,8 +660,6 @@ function datosDesdeElemento(elemento, tipo) {
                 nombre: tarjeta.querySelector('h3')?.textContent.trim() || '',
                 codigo,
                 semestre,
-                teachers: (tarjeta.dataset.teachers || '').split(',').filter(Boolean),
-                students: (tarjeta.dataset.students || '').split(',').filter(Boolean),
                 estado: tarjeta.querySelector('.estado')?.textContent.trim() || 'Activa'
             };
         }
@@ -804,22 +679,12 @@ function datosDesdeElemento(elemento, tipo) {
 const modalAdmin = document.getElementById('modal-admin');
 const modalUsuario = document.getElementById('modal-usuario');
 const modalInstitucion = document.getElementById('modal-institucion');
-const modalPractica = document.getElementById('modal-practica');
 const modalPrograma = document.getElementById('modal-programa');
-
-campo('campo-semestre').addEventListener('change', () => {
-    const seleccionados = valoresSeleccionados(campo('campo-estudiantes-asignatura'));
-    const semestre = campo('campo-semestre').value;
-    campo('ayuda-estudiantes-asignatura').textContent = semestre
-        ? `Solo se muestran estudiantes del semestre ${semestre}.`
-        : 'Elige el semestre para filtrar los estudiantes que puedes asignar.';
-    llenarUsuariosPorRol('campo-estudiantes-asignatura', 'Estudiante', seleccionados, semestre);
-});
 
 function configurarSemestrePorRol() {
     const rol = campo('usuario-rol').value;
     const seleccionados = semestresSeleccionados();
-    const permiteVarios = rol !== 'Estudiante';
+    const permiteVarios = !['Estudiante', 'Director'].includes(rol);
     campo('grupo-semestre-usuario').title = permiteVarios ? 'Puedes seleccionar uno o varios semestres' : 'Solo puedes seleccionar un semestre';
     if (!permiteVarios) {
         seleccionarSemestres(seleccionados[0] || '');
@@ -828,14 +693,17 @@ function configurarSemestrePorRol() {
 
 function configurarIdentificadorUsuario() {
     const esAdministrador = campo('usuario-rol').value === 'Administrador';
+    const rol = campo('usuario-rol').value;
+    const usaPrograma = ['Estudiante', 'Director'].includes(rol);
+    const usaSemestre = ['Estudiante', 'Director'].includes(rol);
     campo('usuario-correo').required = !esAdministrador;
     campo('usuario-nombre').required = esAdministrador;
     campo('etiqueta-usuario-correo').hidden = esAdministrador;
     campo('etiqueta-usuario-nombre').hidden = !esAdministrador;
-    campo('grupo-semestre-usuario').hidden = esAdministrador;
-    campo('grupo-programa-usuario').hidden = esAdministrador;
-    campo('usuario-programa').required = !esAdministrador;
-    campo('usuario-programa').disabled = esAdministrador;
+    campo('grupo-semestre-usuario').hidden = !usaSemestre;
+    campo('grupo-programa-usuario').hidden = !usaPrograma;
+    campo('usuario-programa').required = usaPrograma;
+    campo('usuario-programa').disabled = !usaPrograma;
 }
 
 function abrirModalUsuario(usuario = null) {
@@ -855,22 +723,20 @@ function abrirModalUsuario(usuario = null) {
     campo('usuario-codigo').value = usuario?.codigo || '';
     campo('usuario-rol').value = usuario?.rol || '';
     llenarProgramas(usuario?.programId || '');
-    llenarInstituciones(usuario?.institucion || '', 'usuario-institucion');
     seleccionarSemestres(usuario?.semestre || []);
-    campo('usuario-estado').value = usuario ? (usuario.activo ? 'Activo' : 'Inactivo') : '';
+    campo('usuario-estado').value = usuario ? (usuario.activo ? 'Activo' : 'Inactivo') : 'Activo';
     campo('form-usuario').dataset.editar = usuario?.id || '';
     if (!editando) campo('usuario-codigo').value = 'Se asignará al guardar';
     configurarSemestrePorRol();
     configurarIdentificadorUsuario();
+    llenarAsignaturasUsuario((usuario?.asignaturas || []).map(asignatura => asignatura.id));
+    llenarAsignacionesEstudiante((usuario?.docentesAsignados || []).map(docente => docente.id));
     modalUsuario.showModal();
 }
 
 function abrirModalPrograma(programa = null) {
     campo('programa-titulo').textContent = programa ? 'Editar programa académico' : 'Registrar programa';
-    campo('programa-subtitulo').textContent = programa ? 'Actualizar programa' : 'Nuevo programa académico';
     campo('programa-nombre').value = programa?.nombre || '';
-    llenarDirectores(programa?.director || '');
-    llenarUsuariosPorRol('programa-docentes', 'Docente', programa?.teachers || []);
     campo('form-programa').dataset.editar = programa?.id || '';
     campo('modal-programa').showModal();
 }
@@ -879,8 +745,7 @@ function datosProgramaDesdeTarjeta(tarjeta) {
     return {
         id: tarjeta.dataset.id,
         nombre: tarjeta.querySelector('h3')?.textContent.trim() || '',
-        director: tarjeta.dataset.director || '',
-        teachers: (tarjeta.dataset.teachers || '').split(',').filter(Boolean)
+        director: tarjeta.dataset.director || ''
     };
 }
 
@@ -894,30 +759,7 @@ function abrirModalInstitucion(elemento = null) {
     campo('institucion-nombre').value = datos.nombre || '';
     campo('institucion-direccion').value = datos.direccion || '';
     seleccionarSemestresInstitucion(datos.semestres || []);
-    campo('institucion-practica').value = datos.practica || '';
-    llenarOpciones('institucion-asesor', obtenerAsesoresRegistrados(), datos.asesor);
-    campo('institucion-estado').value = datos.estado || 'Activa';
     modalInstitucion.showModal();
-}
-
-function abrirModalPractica(elemento = null) {
-    tipoRegistro = 'practica';
-    elementoEditado = elemento;
-    const datos = elemento ? datosDesdeElemento(elemento, 'practica') : {};
-    const editando = Boolean(elemento);
-    campo('practica-subtitulo').textContent = editando ? 'Editar practica' : 'Nueva practica';
-    campo('practica-titulo').textContent = editando ? 'Editar practica' : 'Registrar practica';
-    llenarTiposPractica();
-    llenarInstituciones(datos.institutionId || '', 'practica-institucion');
-    llenarUsuariosPorRol('practica-estudiante', 'Estudiante', [datos.estudianteId || '']);
-    llenarUsuariosPorRol('practica-docente', 'Docente', [datos.docenteId || '']);
-    llenarUsuariosPorRol('practica-asesor', 'Asesor', [datos.asesorId || '']);
-    campo('practica-tipo').value = datos.practiceType ||
-        tiposPracticaDisponibles.find(tipo => String(tipo._id) === String(datos.practiceTypeId))?.name || '';
-    campo('practica-fecha-creacion').value = datos.fechaCreacion || '';
-    campo('practica-fecha-limite').value = datos.fechaLimite || '';
-    campo('practica-estado').value = datos.estado || 'Disponible';
-    modalPractica.showModal();
 }
 
 function abrirModal(tipo, usuario, elemento = null) {
@@ -937,23 +779,9 @@ function abrirModal(tipo, usuario, elemento = null) {
     campo('campo-nombre').value = datos.nombre || '';
     campo('campo-codigo').value = datos.codigo || (tipo === 'asignatura' ? generarCodigoAsignatura() : '');
     campo('campo-semestre').value = datos.semestre || '';
-    const semestreSeleccionado = campo('campo-semestre').value;
-    campo('ayuda-estudiantes-asignatura').textContent = semestreSeleccionado
-        ? `Solo se muestran estudiantes del semestre ${semestreSeleccionado}.`
-        : 'Elige el semestre para filtrar los estudiantes que puedes asignar.';
 
     configurarGrupo('grupo-nombre', true, true);
-    configurarGrupo('grupo-codigo', false);
     configurarGrupo('grupo-semestre', tipo === 'asignatura', true);
-    configurarGrupo('grupo-docentes-asignatura', tipo === 'asignatura');
-    configurarGrupo('grupo-estudiantes-asignatura', tipo === 'asignatura');
-    configurarGrupo('grupo-estado-registro', tipo === 'asignatura', true);
-
-    if (tipo === 'asignatura') {
-        llenarUsuariosPorRol('campo-docentes-asignatura', 'Docente', datos.teachers || []);
-        llenarUsuariosPorRol('campo-estudiantes-asignatura', 'Estudiante', datos.students || [], datos.semestre || '');
-        actualizarOpcionesEstado(['Activa', 'Inactiva'], datos.estado || 'Activa');
-    }
 
     document.getElementById('form-admin').dataset.editar = usuario ? usuario.id : '';
     modalAdmin.showModal();
@@ -1164,8 +992,7 @@ document.addEventListener('click', evento => {
                 await Promise.all([
                     cargarUsuariosDesdeApi(),
                     cargarProgramasDesdeApi(),
-                    cargarAsignaturasDesdeApi(),
-                    cargarPracticasDesdeApi()
+                    cargarAsignaturasDesdeApi()
                 ]);
                 avisoAdmin('Usuario eliminado correctamente.');
             })
@@ -1175,9 +1002,7 @@ document.addEventListener('click', evento => {
     }
 
     if (botonRegistro) {
-        if (botonRegistro.dataset.tipo === 'practica') {
-            abrirModalPractica(botonRegistro);
-        } else if (botonRegistro.dataset.tipo === 'programa') {
+        if (botonRegistro.dataset.tipo === 'programa') {
             abrirModalPrograma(datosProgramaDesdeTarjeta(botonRegistro.closest('article')));
         } else {
             abrirModal(botonRegistro.dataset.tipo, null, botonRegistro);
@@ -1188,8 +1013,6 @@ document.addEventListener('click', evento => {
             abrirModalPrograma(datosProgramaDesdeTarjeta(botonTarjeta.closest('article')));
         } else if (tipo === 'institucion') {
             abrirModalInstitucion(botonTarjeta);
-        } else if (tipo === 'practica') {
-            abrirModalPractica(botonTarjeta);
         } else {
             abrirModal(tipo, null, botonTarjeta);
         }
@@ -1197,8 +1020,6 @@ document.addEventListener('click', evento => {
         const tipo = inferirTipoDesdeElemento(botonAccionTabla);
         if (tipo === 'institucion') {
             abrirModalInstitucion(botonAccionTabla);
-        } else if (tipo === 'practica') {
-            abrirModalPractica(botonAccionTabla);
         } else {
             abrirModal(tipo, null, botonAccionTabla);
         }
@@ -1253,21 +1074,24 @@ document.addEventListener('click', evento => {
 document.querySelectorAll('[data-abrir-usuario]').forEach(boton => boton.addEventListener('click', () => abrirModalUsuario()));
 document.querySelectorAll('[data-abrir-programa]').forEach(boton => boton.addEventListener('click', () => abrirModalPrograma()));
 document.querySelectorAll('[data-abrir-institucion]').forEach(boton => boton.addEventListener('click', () => abrirModalInstitucion()));
-document.querySelectorAll('[data-abrir-practica]').forEach(boton => boton.addEventListener('click', () => abrirModalPractica()));
 document.querySelectorAll('[data-abrir-modal]').forEach(boton => boton.addEventListener('click', () => abrirModal(boton.dataset.abrirModal)));
 document.querySelectorAll('.cerrar-modal').forEach(boton => boton.addEventListener('click', () => modalAdmin.close()));
 document.querySelectorAll('.cerrar-modal-usuario').forEach(boton => boton.addEventListener('click', () => modalUsuario.close()));
 document.querySelectorAll('.cerrar-modal-institucion').forEach(boton => boton.addEventListener('click', () => modalInstitucion.close()));
-document.querySelectorAll('.cerrar-modal-practica').forEach(boton => boton.addEventListener('click', () => modalPractica.close()));
 document.querySelectorAll('.cerrar-modal-programa').forEach(boton => boton.addEventListener('click', () => modalPrograma.close()));
 campo('usuario-rol').addEventListener('change', configurarSemestrePorRol);
 campo('usuario-rol').addEventListener('change', configurarIdentificadorUsuario);
+campo('usuario-rol').addEventListener('change', () => llenarAsignaturasUsuario([]));
+campo('usuario-rol').addEventListener('change', () => llenarAsignacionesEstudiante([]));
+campo('usuario-programa').addEventListener('change', () => llenarAsignacionesEstudiante());
 document.querySelectorAll('#usuario-semestres input').forEach(casilla => {
     casilla.addEventListener('change', evento => {
         if (campo('usuario-rol').value === 'Estudiante' && evento.target.checked) {
             seleccionarSemestres(evento.target.value);
         }
         configurarSemestrePorRol();
+        llenarAsignaturasUsuario(valoresSeleccionados(campo('usuario-asignaturas')));
+        llenarAsignacionesEstudiante();
     });
 });
 
@@ -1293,13 +1117,23 @@ campo('form-usuario').addEventListener('submit', evento => {
         avisoAdmin('Los usuarios académicos deben tener un correo válido.', true);
         return;
     }
-    if (rol !== 'Administrador' && !campo('usuario-programa').value) {
+    if (['Director', 'Estudiante'].includes(rol) && !campo('usuario-programa').value) {
         avisoAdmin('Selecciona un programa académico.', true);
         return;
     }
     const semestres = semestresSeleccionados();
-    if (rol === 'Estudiante' && !semestres.length) {
-        avisoAdmin('Selecciona el semestre del estudiante.', true);
+    if (['Estudiante', 'Director'].includes(rol) && !semestres.length) {
+        avisoAdmin(`Selecciona el semestre del ${rol.toLowerCase()}.`, true);
+        return;
+    }
+    const subjects = valoresSeleccionados(campo('usuario-asignaturas'));
+    if (rol === 'Estudiante' && !subjects.length) {
+        avisoAdmin('Asigna al menos una asignatura del mismo semestre al estudiante.', true);
+        return;
+    }
+    const assignedTeachers = rol === 'Estudiante' ? valoresSeleccionados(campo('usuario-docentes')) : [];
+    if (rol === 'Estudiante' && !assignedTeachers.length) {
+        avisoAdmin('Asigna al menos un docente con asignaturas del mismo semestre.', true);
         return;
     }
 
@@ -1310,10 +1144,12 @@ campo('form-usuario').addEventListener('submit', evento => {
         secondLastName: campo('usuario-segundo-apellido').value.trim(),
         ...(rol === 'Administrador' ? { username: nombreUsuario } : { email: correo }),
         role: Object.entries(rolesUsuario).find(([, label]) => label === rol)?.[0],
-        ...(rol !== 'Administrador' ? {
+        ...(['Director', 'Estudiante'].includes(rol) ? {
             programId: campo('usuario-programa').value,
         } : {}),
-        semester: rol === 'Estudiante' ? Number(semestres[0]) : null,
+        semester: ['Estudiante', 'Director'].includes(rol) ? Number(semestres[0]) : null,
+        ...(['Docente', 'Estudiante'].includes(rol) ? { subjects } : {}),
+        ...(rol === 'Estudiante' ? { assignedTeachers } : {}),
         active: campo('usuario-estado').value === 'Activo'
     };
     const password = campo('usuario-contrasena').value;
@@ -1350,19 +1186,16 @@ campo('form-institucion').addEventListener('submit', async evento => {
     const data = {
         name: campo('institucion-nombre').value.trim(),
         address: campo('institucion-direccion').value.trim(),
-        semesters: semestresInstitucionSeleccionados().map(Number),
-        practiceName: campo('institucion-practica').value.trim(),
-        advisorName: campo('institucion-asesor').value,
-        active: campo('institucion-estado').value === 'Activa'
+        semesters: semestresInstitucionSeleccionados().map(Number)
     };
 
     if (!/bucaramanga/i.test(data.address)) {
-        avisoAdmin('La direccion debe pertenecer a Bucaramanga.', true);
+        avisoAdmin('Escribe una dirección ubicada en Bucaramanga.', true);
         return;
     }
 
     if (!data.semesters.length) {
-        avisoAdmin('Selecciona al menos un semestre para la institucion.', true);
+        avisoAdmin('Selecciona el semestre 8, 9 o 10 para la institución.', true);
         return;
     }
 
@@ -1374,69 +1207,8 @@ campo('form-institucion').addEventListener('submit', async evento => {
             body: JSON.stringify(data)
         });
         await cargarInstitucionesDesdeApi();
-        avisoAdmin(institutionId ? 'Institucion actualizada correctamente.' : 'Institucion registrada correctamente.');
+        avisoAdmin(institutionId ? 'Institución actualizada correctamente.' : 'Institución registrada correctamente.');
         modalInstitucion.close();
-        formulario.reset();
-        elementoEditado = null;
-    } catch (error) {
-        avisoAdmin(error.message, true);
-    } finally {
-        submit.disabled = false;
-    }
-});
-
-async function obtenerTipoPractica(seleccion) {
-    const nombre = seleccion.trim();
-    if (!nombre) throw new Error('Escribe el tipo de práctica.');
-    const existing = tiposPracticaDisponibles.find(tipo =>
-        String(tipo._id) === String(seleccion) || tipo.name.toLocaleLowerCase() === nombre.toLocaleLowerCase()
-    );
-    if (existing) return existing._id;
-    const result = await solicitarApi('/api/practiceTypes', {
-        method: 'POST',
-        body: JSON.stringify({ name: nombre, active: true })
-    });
-    tiposPracticaDisponibles.push(result.data);
-    llenarTiposPractica();
-    return result.data._id;
-}
-
-campo('form-practica').addEventListener('submit', async evento => {
-    evento.preventDefault();
-    const formulario = evento.currentTarget;
-    const assignmentId = elementoEditado?.closest('tr')?.dataset.id || '';
-    const practiceTypeSelection = campo('practica-tipo').value;
-    const data = {
-        institution: campo('practica-institucion').value,
-        student: campo('practica-estudiante').value,
-        teacher: campo('practica-docente').value,
-        accompanimentResponsible: campo('practica-asesor').value,
-        startDate: campo('practica-fecha-creacion').value,
-        endDate: campo('practica-fecha-limite').value,
-        status: estadoPracticaApi(campo('practica-estado').value)
-    };
-
-    if (!practiceTypeSelection.trim() || !data.institution || !data.student || !data.teacher || !data.accompanimentResponsible) {
-        avisoAdmin('Escribe el tipo de práctica y selecciona institución, estudiante, docente y asesor.', true);
-        return;
-    }
-
-    if (data.endDate < data.startDate) {
-        avisoAdmin('La fecha limite debe ser posterior a la fecha de creacion.', true);
-        return;
-    }
-
-    const submit = formulario.querySelector('[type="submit"]');
-    submit.disabled = true;
-    try {
-        data.practiceType = await obtenerTipoPractica(practiceTypeSelection);
-        await solicitarApi(assignmentId ? `/api/assignments/${assignmentId}` : '/api/assignments', {
-            method: assignmentId ? 'PATCH' : 'POST',
-            body: JSON.stringify(data)
-        });
-        await cargarPracticasDesdeApi();
-        avisoAdmin(assignmentId ? 'Practica actualizada correctamente.' : 'Practica registrada correctamente.');
-        modalPractica.close();
         formulario.reset();
         elementoEditado = null;
     } catch (error) {
@@ -1458,10 +1230,7 @@ document.getElementById('form-admin').addEventListener('submit', async evento =>
         registro = {
             name: nombre,
             code: datosActuales.codigo || campo('campo-codigo').value.trim() || generarCodigoAsignatura(),
-            semester: campo('campo-semestre').value.trim(),
-            teachers: valoresSeleccionados(campo('campo-docentes-asignatura')),
-            students: valoresSeleccionados(campo('campo-estudiantes-asignatura')),
-            active: campo('campo-estado-registro').value === 'Activa'
+            semester: Number(campo('campo-semestre').value)
         };
         const subjectId = datosActuales.id;
         try {
@@ -1501,8 +1270,6 @@ async function inicializarAdministrador() {
         await cargarAsignaturasDesdeApi();
         await cargarProgramasDesdeApi();
         await cargarInstitucionesDesdeApi();
-        await cargarTiposPracticaDesdeApi();
-        await cargarPracticasDesdeApi();
     } catch (error) {
         avisoAdmin(error.message, true);
         ['texto-usuarios', 'texto-asignaturas', 'texto-instituciones', 'texto-practicas'].forEach(id => {

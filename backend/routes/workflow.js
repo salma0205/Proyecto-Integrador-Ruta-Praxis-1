@@ -1,15 +1,21 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const multer = require('multer');
+const crypto = require('node:crypto');
+const database = require('../config/database');
 const {
     User,
     AcademicProgram,
     AcademicSubject,
+    Institution,
+    PracticeType,
     PracticeAssignment,
     Activity,
     Submission,
     Observation,
     Evaluation,
     PracticeLog,
+    PracticeVisit,
+    AttendanceValidation,
     StudentNotification
 } = require('../models');
 const { requireAuth, requireRole } = require('../middleware/auth');
@@ -17,32 +23,54 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const router = express.Router();
 router.use(requireAuth, requireRole('estudiante', 'docente', 'asesor', 'director'));
 
+const uploadActivityResources = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024, files: 5 }
+});
+const maxActivityResourcesSize = 20 * 1024 * 1024;
+
 function badRequest(message) {
     const error = new Error(message);
     error.status = 400;
     return error;
 }
 
+function requiredHoursOf(assignment) {
+    const assignmentHours = Number(assignment.requiredHours);
+    return assignmentHours > 0 ? assignmentHours : Number(assignment.practiceType?.requiredHours) || 0;
+}
+
 async function assignmentsFor(user) {
     let filter;
     if (user.role === 'estudiante') filter = { student: user._id };
-    if (user.role === 'docente') filter = { teacher: user._id };
+    if (user.role === 'docente') filter = { $or: [{ teachers: user._id }, { teacher: user._id }] };
     if (user.role === 'asesor') filter = { accompanimentResponsible: user._id };
     if (user.role === 'director') {
-        const programs = await AcademicProgram.find({ director: user._id }).select('_id');
+        const programId = user.programId?._id || user.programId;
+        const semester = Number(user.semester);
+        if (!programId || ![8, 9, 10].includes(semester)) return [];
         const students = await User.find({
             role: 'estudiante',
-            programId: { $in: programs.map(program => program._id) }
+            active: true,
+            semester,
+            assignedDirectors: user._id,
+            programId
         }).select('_id');
-        filter = { student: { $in: students.map(student => student._id) } };
+        if (!students.length) return [];
+        filter = {
+            program: programId,
+            student: { $in: students.map(student => student._id) }
+        };
     }
     return PracticeAssignment.find(filter)
         .sort({ createdAt: -1 })
         .limit(250)
         .populate('practiceType', 'name semester requiredHours')
+        .populate('program', 'name')
         .populate('institution', 'name')
-        .populate('student', 'firstName middleName lastName secondLastName email studentCode programId')
+        .populate('student', 'firstName middleName lastName secondLastName email studentCode')
         .populate('teacher', 'firstName lastName')
+        .populate('teachers', 'firstName middleName lastName secondLastName email')
         .populate('accompanimentResponsible', 'firstName lastName');
 }
 
@@ -50,8 +78,10 @@ function idsOf(assignments) {
     return assignments.map(assignment => assignment._id);
 }
 
-function assertObjectId(value, label) {
-    if (!mongoose.isValidObjectId(value)) throw badRequest(`${label} no es válido.`);
+function assertUuid(value, label) {
+    if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+        throw badRequest(`${label} no es válido.`);
+    }
 }
 
 async function notifyStudents(studentIds, actor, type, title, message, view) {
@@ -91,7 +121,7 @@ router.patch('/notifications/read-all', requireRole('estudiante'), async (req, r
 
 router.patch('/notifications/:id/read', requireRole('estudiante'), async (req, res, next) => {
     try {
-        assertObjectId(req.params.id, 'La notificación');
+        assertUuid(req.params.id, 'La notificación');
         const notification = await StudentNotification.findOneAndUpdate(
             { _id: req.params.id, recipient: req.user._id, readAt: null },
             { $set: { readAt: new Date() } },
@@ -104,35 +134,231 @@ router.patch('/notifications/:id/read', requireRole('estudiante'), async (req, r
 });
 
 async function ownedAssignment(user, assignmentId, roles = [user.role]) {
-    assertObjectId(assignmentId, 'La asignación');
+    assertUuid(assignmentId, 'La asignación');
     const assignment = await PracticeAssignment.findById(assignmentId);
     if (!assignment) return null;
 
     const owns = roles.some(role => {
         if (role === 'estudiante') return String(assignment.student) === String(user._id);
-        if (role === 'docente') return String(assignment.teacher) === String(user._id);
+        if (role === 'docente') {
+            return (assignment.teachers || []).some(teacher => String(teacher?._id || teacher) === String(user._id)) ||
+                String(assignment.teacher?._id || assignment.teacher) === String(user._id);
+        }
         if (role === 'asesor') return String(assignment.accompanimentResponsible) === String(user._id);
         return false;
     });
     return owns ? assignment : null;
 }
 
+async function canAccessActivityResources(user, activity) {
+    if (user.role === 'docente' && String(activity.author) === String(user._id)) return true;
+    if (activity.assignment && await ownedAssignment(user, activity.assignment, ['estudiante', 'docente'])) return true;
+    if (!activity.subject || !['estudiante', 'docente'].includes(user.role)) return false;
+
+    const filter = user.role === 'estudiante'
+        ? { semester: user.semester == null ? -1 : Number(user.semester), students: user._id }
+        : { teachers: user._id };
+    return Boolean(await AcademicSubject.findOne({ _id: activity.subject, active: true, ...filter }));
+}
+
+router.get('/activities/:activityId/resources/:resourceId', requireRole('estudiante', 'docente'), async (req, res, next) => {
+    try {
+        assertUuid(req.params.activityId, 'La actividad');
+        assertUuid(req.params.resourceId, 'El archivo');
+        const activity = await Activity.findById(req.params.activityId);
+        if (!activity) return res.status(404).json({ error: 'No se encontró la actividad.' });
+        if (!await canAccessActivityResources(req.user, activity)) {
+            return res.status(403).json({ error: 'No tienes permiso para consultar este archivo.' });
+        }
+
+        const result = await database.execute(
+            'SELECT name, mime_type, file_data FROM activity_resources WHERE id = :resourceId AND activity_id = :activityId',
+            { resourceId: req.params.resourceId, activityId: activity._id }
+        );
+        const resource = result.rows[0];
+        if (!resource) return res.status(404).json({ error: 'No se encontró el archivo adjunto.' });
+
+        const name = String(resource.NAME).replace(/[\r\n"]/g, '_');
+        const disposition = /^video\/(mp4|webm|ogg|quicktime)$/i.test(resource.MIME_TYPE) ? 'inline' : 'attachment';
+        const contents = Buffer.from(resource.FILE_DATA, 'base64');
+        res.setHeader('Content-Type', resource.MIME_TYPE);
+        res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(name)}`);
+        res.setHeader('Content-Length', contents.length);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.send(contents);
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.get('/practice-options', requireRole('director'), async (req, res, next) => {
+    try {
+        const programId = req.user.programId?._id || req.user.programId;
+        const program = programId
+            ? await AcademicProgram.findOne({ _id: programId, active: true }).select('_id name')
+            : null;
+        if (!program) return res.status(409).json({ error: 'Tu cuenta no tiene un programa académico activo asignado.' });
+        const semester = Number(req.user.semester);
+        if (!Number.isInteger(semester) || semester < 1 || semester > 10) {
+            return res.status(409).json({ error: 'El Administrador debe asignarte un semestre entre 1 y 10.' });
+        }
+        const [students, advisors, institutions, practiceTypes] = await Promise.all([
+            User.find({
+                role: 'estudiante',
+                active: true,
+                programId: program._id,
+                semester,
+                assignedDirectors: req.user._id
+            })
+                .select('firstName middleName lastName secondLastName email semester subjects assignedTeachers')
+                .populate('subjects', 'name semester')
+                .populate('assignedTeachers', 'firstName middleName lastName secondLastName email active')
+                .sort({ lastName: 1, firstName: 1 }),
+            User.find({ role: 'asesor', active: true })
+                .select('firstName middleName lastName secondLastName')
+                .sort({ lastName: 1, firstName: 1 }),
+            Institution.find({ active: true }).populate('semesters'),
+            PracticeType.find({ active: true }).select('name semester').sort({ name: 1 })
+        ]);
+        const academicStudents = students.map(student => {
+            const data = student.toObject();
+            data.assignedTeachers = (student.assignedTeachers || []).filter(teacher => teacher.active);
+            return data;
+        });
+        const practiceStudents = [8, 9, 10].includes(semester) ? academicStudents : [];
+        const teachers = [...new Map(academicStudents.flatMap(student => student.assignedTeachers)
+            .map(teacher => [String(teacher._id), teacher])).values()];
+        res.json({ data: { program, students: practiceStudents, academicStudents, teachers, advisors, institutions, practiceTypes } });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.post('/assignments', requireRole('director'), async (req, res, next) => {
+    try {
+        const {
+            practiceType,
+            institution: institutionId,
+            student: studentId,
+            accompanimentResponsible: advisorId,
+            startDate,
+            endDate,
+            requiredHours
+        } = req.body || {};
+        const practiceName = typeof practiceType === 'string' ? practiceType.trim() : '';
+        const hours = Number(requiredHours);
+        if (!practiceName || practiceName.length > 160 || !institutionId || !studentId || !startDate || !endDate ||
+            !Number.isFinite(hours) || hours <= 0 || hours > 99999.9) {
+            throw badRequest('Completa los datos de la práctica e indica las horas requeridas (mayor que cero).');
+        }
+        assertUuid(institutionId, 'La institución');
+        assertUuid(studentId, 'El estudiante');
+        if (advisorId) assertUuid(advisorId, 'El asesor');
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+            throw badRequest('Ingresa fechas válidas y una fecha final igual o posterior a la inicial.');
+        }
+
+        const programId = req.user.programId?._id || req.user.programId;
+        const program = programId
+            ? await AcademicProgram.findOne({ _id: programId, active: true }).select('_id')
+            : null;
+        if (!program) return res.status(409).json({ error: 'Tu cuenta no tiene un programa académico activo asignado.' });
+        if (![8, 9, 10].includes(Number(req.user.semester))) {
+            throw badRequest('Solo los Directores de los semestres 8, 9 o 10 pueden asignar prácticas.');
+        }
+        const [student, advisor, institution] = await Promise.all([
+            User.findOne({
+                _id: studentId, role: 'estudiante', active: true,
+                semester: Number(req.user.semester),
+                programId: program._id,
+                assignedDirectors: req.user._id
+            }).select('semester programId assignedTeachers')
+                .populate('assignedTeachers', 'role active'),
+            advisorId ? User.findOne({ _id: advisorId, role: 'asesor', active: true }).select('_id') : null,
+            Institution.findOne({ _id: institutionId, active: true }).populate('semesters')
+        ]);
+        if (!student || ![8, 9, 10].includes(Number(student.semester))) {
+            throw badRequest('Solo puedes asignar prácticas a estudiantes activos de los semestres 8, 9 o 10.');
+        }
+        const teachers = (student.assignedTeachers || []).filter(teacher => teacher.active && teacher.role === 'docente');
+        if (!teachers.length || teachers.length !== (student.assignedTeachers || []).length) {
+            throw badRequest('El Administrador debe asignar docentes activos al estudiante.');
+        }
+        const teacherIds = teachers.map(teacher => String(teacher._id));
+        const teacherSubjects = await AcademicSubject.find({
+            active: true,
+            semester: Number(student.semester),
+            teachers: { $in: teacherIds }
+        }).select('teachers').populate('teachers', '_id');
+        const teachersInSemester = new Set(teacherSubjects.flatMap(subject =>
+            (subject.teachers || []).map(teacher => String(teacher._id))
+        ));
+        if (teacherIds.some(id => !teachersInSemester.has(id))) {
+            throw badRequest('Cada docente asignado debe tener una asignatura activa del semestre del estudiante.');
+        }
+        if (advisorId && !advisor) throw badRequest('Selecciona un asesor activo.');
+        if (!institution) throw badRequest('Selecciona una institución activa.');
+        const institutionSemesters = (institution.semesters || []).map(value =>
+            Number(value && typeof value === 'object' ? value.semester : value)
+        );
+        if (!institutionSemesters.includes(Number(student.semester))) {
+            throw badRequest('La institución debe estar asociada al mismo semestre del estudiante.');
+        }
+
+        let type = await PracticeType.findOne({ name: practiceName, semester: Number(student.semester) });
+        if (type?.active === false) throw badRequest('Ese tipo de práctica está inactivo para el semestre seleccionado.');
+        if (!type) {
+            type = await PracticeType.create({
+                name: practiceName,
+                semester: Number(student.semester),
+                active: true
+            });
+        }
+        const assignment = await PracticeAssignment.create({
+            practiceType: type._id,
+            program: program._id,
+            student: studentId,
+            teacher: teacherIds[0],
+            teachers: teacherIds,
+            ...(advisorId ? { accompanimentResponsible: advisorId } : {}),
+            institution: institutionId,
+            startDate: start,
+            endDate: end,
+            requiredHours: hours,
+            status: 'disponible',
+            approvalStatus: 'pendiente'
+        });
+        res.status(201).json({ data: assignment });
+    } catch (error) {
+        next(error);
+    }
+});
+
 router.get('/dashboard', async (req, res, next) => {
     try {
         const assignments = await assignmentsFor(req.user);
         const assignmentIds = idsOf(assignments);
-        const subjectRoleField = req.user.role === 'docente' ? 'teachers' : req.user.role === 'estudiante' ? 'students' : null;
-        const subjectFilter = subjectRoleField ? { active: true, [subjectRoleField]: req.user._id } : null;
-        if (req.user.role === 'estudiante' && req.user.semester) {
-            subjectFilter.semester = Number(req.user.semester);
-        }
+        const subjectFilter = req.user.role === 'docente'
+            ? { active: true, teachers: req.user._id }
+            : req.user.role === 'estudiante'
+                ? { active: true, students: req.user._id, semester: req.user.semester == null ? -1 : Number(req.user.semester) }
+                : null;
         const subjectsQuery = subjectFilter
             ? AcademicSubject.find(subjectFilter)
                 .sort({ semester: 1, name: 1 })
                 .populate('teachers', 'firstName middleName lastName secondLastName email')
                 .populate({ path: 'students', match: { active: true }, select: 'firstName middleName lastName secondLastName email studentCode semester' })
             : Promise.resolve([]);
-        const subjects = await subjectsQuery;
+        const assignedStudentsQuery = req.user.role === 'docente'
+            ? User.find({ role: 'estudiante', active: true, assignedTeachers: req.user._id })
+                .select('firstName middleName lastName secondLastName email studentCode semester')
+                .populate('subjects', 'name semester')
+                .populate('assignedDirectors', 'firstName middleName lastName secondLastName')
+                .sort({ lastName: 1, firstName: 1 })
+            : Promise.resolve([]);
+        const [subjects, assignedStudents] = await Promise.all([subjectsQuery, assignedStudentsQuery]);
         const subjectIds = subjects.map(subject => subject._id);
         const activities = await Activity.find({ $or: [{ assignment: { $in: assignmentIds } }, { subject: { $in: subjectIds } }] })
             .sort({ createdAt: -1 }).limit(250)
@@ -140,14 +366,34 @@ router.get('/dashboard', async (req, res, next) => {
             .populate('subject', 'name code semester')
             .populate('author', 'firstName lastName');
         const activityIds = activities.map(activity => activity._id);
-        const [submissions, logs, observations, evaluations] = await Promise.all([
+        const [submissions, logs, observations, evaluations, attendanceValidations] = await Promise.all([
             Submission.find({ activity: { $in: activityIds } }).sort({ submittedAt: -1 }).limit(250).populate('activity', 'title subject assignment').populate('assignment', 'student teacher').populate('student', 'firstName lastName email'),
             PracticeLog.find({ assignment: { $in: assignmentIds } }).sort({ date: -1 }).limit(500).populate('assignment', 'student practiceType institution').populate('student', 'firstName lastName').populate('reviewedBy', 'firstName lastName'),
             Observation.find({ assignment: { $in: assignmentIds }, ...(req.user.role === 'estudiante' ? { visibleToStudent: true } : {}) }).sort({ observedAt: -1 }).limit(250).populate('student', 'firstName lastName').populate('author', 'firstName lastName'),
-            Evaluation.find({ assignment: { $in: assignmentIds } }).sort({ evaluatedAt: -1 }).limit(250).populate('assignment', 'student practiceType').populate('student', 'firstName lastName').populate('evaluator', 'firstName lastName')
+            Evaluation.find({ assignment: { $in: assignmentIds } }).sort({ evaluatedAt: -1 }).limit(250).populate('assignment', 'student practiceType').populate('student', 'firstName lastName').populate('evaluator', 'firstName lastName'),
+            AttendanceValidation.find({ assignment: { $in: assignmentIds } }).sort({ date: -1 }).limit(500).populate('assignment', 'student practiceType institution').populate('student', 'firstName lastName').populate('advisor', 'firstName lastName')
         ]);
+        const resourceBinds = Object.fromEntries(activityIds.map((id, index) => [`activity${index}`, String(id)]));
+        const resources = activityIds.length
+            ? (await database.execute(
+                `SELECT id, activity_id, name, mime_type, size_bytes FROM activity_resources WHERE activity_id IN (${activityIds.map((_, index) => `:activity${index}`).join(', ')}) ORDER BY created_at`,
+                resourceBinds
+            )).rows
+            : [];
+        const resourcesByActivity = new Map();
+        resources.forEach(resource => {
+            const activityId = String(resource.ACTIVITY_ID);
+            if (!resourcesByActivity.has(activityId)) resourcesByActivity.set(activityId, []);
+            resourcesByActivity.get(activityId).push({
+                id: resource.ID,
+                name: resource.NAME,
+                mimeType: resource.MIME_TYPE,
+                sizeBytes: Number(resource.SIZE_BYTES),
+                url: `/api/workflow/activities/${activityId}/resources/${resource.ID}`
+            });
+        });
         const approvedHours = logs.filter(log => log.status === 'aprobada').reduce((total, log) => total + log.hours, 0);
-        const requiredHours = assignments.reduce((total, assignment) => total + (assignment.practiceType?.requiredHours || 0), 0);
+        const requiredHours = assignments.reduce((total, assignment) => total + requiredHoursOf(assignment), 0);
         res.json({
             data: {
                 assignments,
@@ -158,17 +404,21 @@ router.get('/dashboard', async (req, res, next) => {
                     }
                     return data;
                 }),
-                activities,
+                assignedStudents,
+                activities: activities.map(activity => ({
+                    ...activity.toObject(),
+                    resources: resourcesByActivity.get(String(activity._id)) || []
+                })),
                 submissions,
                 logs,
                 observations,
                 evaluations,
+                attendanceValidations,
                 metrics: {
                     assignments: assignments.length,
                     activeAssignments: assignments.filter(item => item.status === 'en_curso').length,
                     students: new Set(assignments.map(item => String(item.student?._id)).filter(Boolean)).size,
                     pendingApprovals: assignments.filter(item => item.approvalStatus === 'pendiente').length,
-                    pendingSubmissions: submissions.filter(item => item.status === 'en_revision').length,
                     pendingLogs: logs.filter(item => item.status === 'pendiente').length,
                     approvedHours,
                     requiredHours,
@@ -184,14 +434,29 @@ router.get('/dashboard', async (req, res, next) => {
     }
 });
 
-router.post('/activities', requireRole('docente'), async (req, res, next) => {
+router.post('/activities', requireRole('docente'), uploadActivityResources.array('resources', 5), async (req, res, next) => {
     try {
         const { assignment: assignmentId, subject: subjectId, title, instructions, dueDate, resourceUrl } = req.body || {};
+        const files = req.files || [];
+        const totalFileSize = files.reduce((total, file) => total + file.size, 0);
+        if (totalFileSize > maxActivityResourcesSize) {
+            throw badRequest('Los archivos adjuntos no pueden superar 20 MB en total.');
+        }
+        if (files.some(file => {
+            const mimeType = file.mimetype || 'application/octet-stream';
+            return mimeType.length > 100 || !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(mimeType);
+        })) {
+            throw badRequest('Uno de los archivos tiene un tipo no válido.');
+        }
         let assignment = null;
         let subject = null;
         if (subjectId) {
-            assertObjectId(subjectId, 'La asignatura');
-            subject = await AcademicSubject.findOne({ _id: subjectId, active: true, teachers: req.user._id });
+            assertUuid(subjectId, 'La asignatura');
+            subject = await AcademicSubject.findOne({
+                _id: subjectId,
+                active: true,
+                teachers: req.user._id
+            });
             if (!subject) return res.status(404).json({ error: 'No tienes esta asignatura asignada.' });
         } else {
             assignment = await ownedAssignment(req.user, assignmentId, ['docente']);
@@ -203,6 +468,9 @@ router.post('/activities', requireRole('docente'), async (req, res, next) => {
         if (typeof title !== 'string' || !title.trim() || typeof instructions !== 'string' || !instructions.trim()) {
             throw badRequest('El título y las instrucciones son obligatorios.');
         }
+        if (resourceUrl && (typeof resourceUrl !== 'string' || resourceUrl.length > 2048 || !/^https?:\/\//i.test(resourceUrl))) {
+            throw badRequest('El enlace de apoyo debe ser una URL HTTP o HTTPS válida.');
+        }
         const activity = await Activity.create({
             ...(assignment ? { assignment: assignment._id } : {}),
             ...(subject ? { subject: subject._id } : {}),
@@ -212,6 +480,20 @@ router.post('/activities', requireRole('docente'), async (req, res, next) => {
             dueDate: dueDate || undefined,
             resourceUrl: resourceUrl || undefined
         });
+        if (files.length) {
+            const bindValues = { activityId: activity._id };
+            const inserts = files.map((file, index) => {
+                const bind = `resource${index}`;
+                const originalName = file.originalname.replace(/[\\/\0]/g, '_').slice(0, 255);
+                bindValues[`${bind}Id`] = crypto.randomUUID();
+                bindValues[`${bind}Name`] = originalName || 'archivo';
+                bindValues[`${bind}MimeType`] = file.mimetype || 'application/octet-stream';
+                bindValues[`${bind}Size`] = file.size;
+                bindValues[`${bind}Data`] = file.buffer.toString('base64');
+                return `INTO activity_resources (id, activity_id, name, mime_type, size_bytes, file_data) VALUES (:${bind}Id, :activityId, :${bind}Name, :${bind}MimeType, :${bind}Size, :${bind}Data)`;
+            });
+            await database.execute(`INSERT ALL ${inserts.join(' ')} SELECT 1 FROM dual`, bindValues);
+        }
         let recipientIds = assignment ? [assignment.student] : [];
         if (subject) {
             const students = await User.find({
@@ -232,7 +514,7 @@ router.post('/activities', requireRole('docente'), async (req, res, next) => {
 router.post('/submissions', requireRole('estudiante'), async (req, res, next) => {
     try {
         const { activity: activityId, response = '', evidence = [] } = req.body || {};
-        assertObjectId(activityId, 'La actividad');
+        assertUuid(activityId, 'La actividad');
         const activity = await Activity.findById(activityId).select('assignment subject status');
         if (!activity) return res.status(404).json({ error: 'No se encontró la actividad.' });
         const assignment = activity.assignment ? await ownedAssignment(req.user, activity.assignment, ['estudiante']) : null;
@@ -240,8 +522,8 @@ router.post('/submissions', requireRole('estudiante'), async (req, res, next) =>
             ? await AcademicSubject.findOne({
                 _id: activity.subject,
                 active: true,
-                students: req.user._id,
-                ...(req.user.semester ? { semester: Number(req.user.semester) } : {})
+                semester: req.user.semester == null ? -1 : Number(req.user.semester),
+                students: req.user._id
             })
             : null;
         if (!assignment && !subject) return res.status(403).json({ error: 'No tienes esta actividad asignada.' });
@@ -279,7 +561,7 @@ router.post('/submissions', requireRole('estudiante'), async (req, res, next) =>
 
 router.patch('/submissions/:id/review', requireRole('docente', 'asesor'), async (req, res, next) => {
     try {
-        assertObjectId(req.params.id, 'La entrega');
+        assertUuid(req.params.id, 'La entrega');
         const submission = await Submission.findById(req.params.id);
         if (!submission) return res.status(404).json({ error: 'No se encontró la entrega.' });
         const assignment = submission.assignment
@@ -287,7 +569,10 @@ router.patch('/submissions/:id/review', requireRole('docente', 'asesor'), async 
             : null;
         const activity = await Activity.findById(submission.activity).select('subject');
         const subject = activity?.subject && req.user.role === 'docente'
-            ? await AcademicSubject.findOne({ _id: activity.subject, teachers: req.user._id })
+            ? await AcademicSubject.findOne({
+                _id: activity.subject,
+                teachers: req.user._id
+            })
             : null;
         if (!assignment && !subject) return res.status(403).json({ error: 'No tienes acceso a esta entrega.' });
         const { status, feedback = '' } = req.body || {};
@@ -327,7 +612,7 @@ router.post('/logs', requireRole('estudiante'), async (req, res, next) => {
 
 router.patch('/logs/:id/review', requireRole('docente', 'asesor'), async (req, res, next) => {
     try {
-        assertObjectId(req.params.id, 'El registro de horas');
+        assertUuid(req.params.id, 'El registro de horas');
         const log = await PracticeLog.findById(req.params.id);
         if (!log) return res.status(404).json({ error: 'No se encontró el registro de horas.' });
         const assignment = await ownedAssignment(req.user, log.assignment, ['docente', 'asesor']);
@@ -342,6 +627,75 @@ router.patch('/logs/:id/review', requireRole('docente', 'asesor'), async (req, r
         await log.save();
         await notifyStudents([log.student], req.user, 'practiceLog', 'Bitácora revisada', `Tu registro de horas fue ${status === 'aprobada' ? 'aprobado' : 'rechazado'}.${reviewComment.trim() ? ` Comentario: ${reviewComment.trim()}` : ''}`, 'informacion-proceso');
         res.json({ data: log });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.post('/visits', requireRole('docente'), async (req, res, next) => {
+    try {
+        const { assignment: assignmentId, visitDate, observation, agreements = '', status = 'realizada' } = req.body || {};
+        const assignment = await ownedAssignment(req.user, assignmentId, ['docente']);
+        if (!assignment) return res.status(404).json({ error: 'No se encontró una práctica asignada a tu cuenta.' });
+        if (!['programada', 'realizada'].includes(status) ||
+            typeof observation !== 'string' || !observation.trim() || observation.length > 5000 ||
+            typeof agreements !== 'string' || agreements.length > 3000 ||
+            !visitDate || Number.isNaN(new Date(visitDate).getTime())) {
+            throw badRequest('Ingresa una fecha válida, una observación y un estado válido para la visita.');
+        }
+        const visit = await PracticeVisit.create({
+            assignment: assignment._id,
+            tutor: req.user._id,
+            visitDate,
+            observation: observation.trim(),
+            agreements: agreements.trim(),
+            status
+        });
+        await notifyStudents(
+            [assignment.student],
+            req.user,
+            'practice',
+            'Visita de seguimiento',
+            `Tu tutor registró una visita ${status === 'realizada' ? 'realizada' : 'programada'} para ${new Date(visitDate).toLocaleDateString('es-CO')}.`,
+            'mi-practica'
+        );
+        res.status(201).json({ data: visit });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.post('/attendance', requireRole('asesor'), async (req, res, next) => {
+    try {
+        const { assignment: assignmentId, date, attendanceStatus, performanceScore, comments } = req.body || {};
+        const assignment = await ownedAssignment(req.user, assignmentId, ['asesor']);
+        if (!assignment) return res.status(404).json({ error: 'No se encontró una práctica asignada a tu cuenta.' });
+        if (!date || Number.isNaN(new Date(date).getTime()) ||
+            !['presente', 'ausente', 'tardanza'].includes(attendanceStatus) ||
+            performanceScore === undefined || performanceScore === null || String(performanceScore).trim() === '' ||
+            !Number.isFinite(Number(performanceScore)) || Number(performanceScore) < 0 ||
+            Number(performanceScore) > 5 ||
+            typeof comments !== 'string' || !comments.trim() || comments.length > 3000) {
+            throw badRequest('Ingresa una fecha válida, asistencia, desempeño entre 0 y 5 y un comentario.');
+        }
+        const validation = await AttendanceValidation.create({
+            assignment: assignment._id,
+            student: assignment.student,
+            advisor: req.user._id,
+            date,
+            attendanceStatus,
+            performanceScore: Number(performanceScore),
+            comments: comments.trim()
+        });
+        await notifyStudents(
+            [assignment.student],
+            req.user,
+            'observation',
+            'Asistencia y desempeño registrados',
+            `Tu asesor registró asistencia (${attendanceStatus}) y desempeño de ${validation.performanceScore}/5.`,
+            'informacion-proceso'
+        );
+        res.status(201).json({ data: validation });
     } catch (error) {
         next(error);
     }
@@ -396,23 +750,49 @@ router.post('/evaluations', requireRole('docente'), async (req, res, next) => {
 
 router.patch('/assignments/:id/approval', requireRole('director'), async (req, res, next) => {
     try {
-        assertObjectId(req.params.id, 'La asignación');
-        const assignment = await PracticeAssignment.findById(req.params.id).populate('student', 'programId');
+        assertUuid(req.params.id, 'La asignación');
+        const assignment = await PracticeAssignment.findById(req.params.id)
+            .populate('program', 'name')
+            .populate('student', 'firstName lastName semester programId assignedDirectors');
         if (!assignment) return res.status(404).json({ error: 'No se encontró la asignación.' });
-        const program = assignment.student?.programId
-            ? await AcademicProgram.findOne({ _id: assignment.student.programId, director: req.user._id }).select('_id')
-            : null;
-        if (!program) return res.status(403).json({ error: 'Solo el director del programa del estudiante puede aprobar esta práctica.' });
-        const { approvalStatus, approvalComment = '' } = req.body || {};
-        if (!['aprobada', 'rechazada'].includes(approvalStatus) || typeof approvalComment !== 'string' || approvalComment.length > 2000) {
-            throw badRequest('Selecciona aprobar o rechazar e ingresa un comentario válido.');
+        const directorProgramId = req.user.programId?._id || req.user.programId;
+        if (String(assignment.program?._id || '') !== String(directorProgramId || '')) {
+            return res.status(403).json({ error: 'Solo el director del programa asignado a la práctica puede aprobarla.' });
         }
-        assignment.approvalStatus = approvalStatus;
-        assignment.approvalComment = approvalComment.trim();
-        assignment.approvedBy = req.user._id;
-        assignment.approvedAt = new Date();
+        if (![8, 9, 10].includes(Number(assignment.student?.semester)) ||
+            Number(assignment.student?.semester) !== Number(req.user.semester) ||
+            String(assignment.student?.programId || '') !== String(assignment.program?._id || '')) {
+            return res.status(403).json({ error: 'Solo puedes gestionar prácticas de estudiantes de los semestres 8, 9 o 10.' });
+        }
+        if (!(assignment.student?.assignedDirectors || []).some(director =>
+            String(director?._id || director) === String(req.user._id)
+        )) {
+            return res.status(403).json({ error: 'Este estudiante no está asignado a tu cuenta por el Administrador.' });
+        }
+        const { approvalStatus, approvalComment = '' } = req.body || {};
+        if (!['aprobada', 'rechazada', 'pendiente'].includes(approvalStatus) ||
+            typeof approvalComment !== 'string' || approvalComment.length > 2000) {
+            throw badRequest('Selecciona una decisión válida e ingresa un comentario válido.');
+        }
+        if (approvalStatus === 'pendiente' && assignment.approvalStatus !== 'aprobada') {
+            return res.status(409).json({ error: 'Solo puedes cancelar una aprobación vigente.' });
+        }
+        if (approvalStatus === 'pendiente') {
+            assignment.approvalStatus = 'pendiente';
+            assignment.approvalComment = '';
+            assignment.approvedBy = null;
+            assignment.approvedAt = null;
+        } else {
+            assignment.approvalStatus = approvalStatus;
+            assignment.approvalComment = approvalComment.trim();
+            assignment.approvedBy = req.user._id;
+            assignment.approvedAt = new Date();
+        }
         await assignment.save();
-        await notifyStudents([assignment.student._id], req.user, 'practice', 'Actualización de práctica', `Tu práctica fue ${approvalStatus === 'aprobada' ? 'aprobada' : 'rechazada'}.${approvalComment.trim() ? ` Comentario: ${approvalComment.trim()}` : ''}`, 'mi-practica');
+        const notification = approvalStatus === 'pendiente'
+            ? 'La aprobación de tu práctica fue cancelada y volvió a pendiente.'
+            : `Tu práctica fue ${approvalStatus === 'aprobada' ? 'aprobada' : 'rechazada'}.${approvalComment.trim() ? ` Comentario: ${approvalComment.trim()}` : ''}`;
+        await notifyStudents([assignment.student._id], req.user, 'practice', 'Actualización de práctica', notification, 'mi-practica');
         res.json({ data: assignment });
     } catch (error) {
         next(error);
@@ -426,7 +806,7 @@ router.get('/reports', requireRole('director'), async (req, res, next) => {
         const logs = await PracticeLog.find({ assignment: { $in: assignmentIds } }).select('hours status');
         const evaluations = await Evaluation.find({ assignment: { $in: assignmentIds } }).select('score');
         const totalHours = logs.filter(log => log.status === 'aprobada').reduce((sum, log) => sum + log.hours, 0);
-        const requiredHours = assignments.reduce((sum, item) => sum + (item.practiceType?.requiredHours || 0), 0);
+        const requiredHours = assignments.reduce((sum, item) => sum + requiredHoursOf(item), 0);
         res.json({
             data: {
                 assignments,
@@ -447,7 +827,76 @@ router.get('/reports', requireRole('director'), async (req, res, next) => {
     }
 });
 
+router.get('/reports.csv', requireRole('director'), async (req, res, next) => {
+    try {
+        const assignments = await assignmentsFor(req.user);
+        const assignmentIds = idsOf(assignments);
+        const [logs, evaluations, attendance, visits] = await Promise.all([
+            PracticeLog.find({ assignment: { $in: assignmentIds }, status: 'aprobada' }).select('assignment hours'),
+            Evaluation.find({ assignment: { $in: assignmentIds } }).select('assignment score'),
+            AttendanceValidation.find({ assignment: { $in: assignmentIds } }).select('assignment attendanceStatus performanceScore'),
+            PracticeVisit.find({ assignment: { $in: assignmentIds } }).select('assignment visitDate status')
+        ]);
+        const quote = value => {
+            const text = String(value ?? '');
+            const safeText = /^[=+\-@]/.test(text) ? `'${text}` : text;
+            return `"${safeText.replace(/"/g, '""')}"`;
+        };
+        const headers = [
+            'Estudiante', 'Programa', 'Tipo de práctica', 'Institución', 'Docente',
+            'Asesor', 'Estado de práctica', 'Aprobación', 'Horas aprobadas',
+            'Horas requeridas', 'Registros de asistencia', 'Promedio de desempeño',
+            'Promedio de evaluación', 'Visitas'
+        ];
+        const rows = assignments.map(assignment => {
+            const relatedLogs = logs.filter(log => String(log.assignment) === String(assignment._id));
+            const relatedEvaluations = evaluations.filter(item => String(item.assignment) === String(assignment._id));
+            const relatedAttendance = attendance.filter(item => String(item.assignment) === String(assignment._id));
+            const relatedVisits = visits.filter(item => String(item.assignment) === String(assignment._id));
+            const average = values => values.length
+                ? (values.reduce((sum, item) => sum + item, 0) / values.length).toFixed(2)
+                : '';
+            return [
+                personNameForReport(assignment.student),
+                assignment.student?.program || '',
+                assignment.practiceType?.name || '',
+                assignment.institution?.name || '',
+                (assignment.teachers || []).map(personNameForReport).join('; ') || personNameForReport(assignment.teacher),
+                personNameForReport(assignment.accompanimentResponsible),
+                assignment.status,
+                assignment.approvalStatus,
+                relatedLogs.reduce((sum, log) => sum + log.hours, 0),
+                requiredHoursOf(assignment),
+                relatedAttendance.map(item => item.attendanceStatus).join('; '),
+                average(relatedAttendance.map(item => item.performanceScore)),
+                average(relatedEvaluations.map(item => item.score)),
+                relatedVisits.map(item => `${new Date(item.visitDate).toLocaleDateString('es-CO')} (${item.status})`).join('; ')
+            ].map(quote).join(',');
+        });
+        const csv = `\uFEFF${[headers.map(quote).join(','), ...rows].join('\r\n')}`;
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="informe-practicas.csv"');
+        res.send(csv);
+    } catch (error) {
+        next(error);
+    }
+});
+
+function personNameForReport(person) {
+    return person && typeof person === 'object'
+        ? [person.firstName, person.middleName, person.lastName, person.secondLastName].filter(Boolean).join(' ')
+        : '';
+}
+
 router.use((error, req, res, next) => {
+    if (error instanceof multer.MulterError) {
+        const message = error.code === 'LIMIT_FILE_SIZE'
+            ? 'Cada archivo debe pesar como máximo 20 MB.'
+            : error.code === 'LIMIT_FILE_COUNT'
+                ? 'Puedes adjuntar hasta 5 archivos.'
+                : 'No se pudo procesar el archivo adjunto.';
+        return res.status(400).json({ error: message });
+    }
     if (error.code === 11000) {
         return res.status(409).json({ error: 'El registro ya existe y no se puede duplicar.' });
     }

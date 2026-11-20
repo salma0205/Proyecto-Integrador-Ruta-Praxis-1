@@ -1,246 +1,250 @@
-const mongoose = require('mongoose');
+const { buildModel, setModelRegistry } = require('./oracle-model');
 
-const { Schema } = mongoose;
-const objectId = Schema.Types.ObjectId;
+function validate(condition, message) {
+    if (!condition) throw Object.assign(new Error(message), { name: 'ValidationError' });
+}
 
-const userSchema = new Schema({
-    firstName: { type: String, required: true, trim: true, maxlength: 80 },
-    middleName: { type: String, trim: true, maxlength: 80 },
-    lastName: { type: String, required: true, trim: true, maxlength: 80 },
-    secondLastName: { type: String, trim: true, maxlength: 80 },
-    email: {
-        type: String,
-        required: function () { return this.role !== 'administrador'; },
-        unique: true,
-        trim: true,
-        lowercase: true,
-        maxlength: 254,
-        validate: {
-            validator: value => !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
-            message: 'El correo debe tener un formato válido.'
-        }
+function validEmail(value) {
+    return !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+const User = buildModel('User', {
+    id: 'id', firstName: 'first_name', middleName: 'middle_name', lastName: 'last_name',
+    secondLastName: 'second_last_name', email: 'email', username: 'username',
+    passwordHash: 'password_hash', documentNumber: 'document_number', studentCode: 'student_code',
+    role: 'role', phone: 'phone', personalEmail: 'personal_email', profilePhoto: 'profile_photo',
+    program: 'program_name', programId: 'program_id', semester: 'semester', active: 'active',
+    createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    booleans: ['active'],
+    required: ['firstName', 'lastName', 'passwordHash', 'role'],
+    defaults: { active: true },
+    enums: { role: ['administrador', 'estudiante', 'asesor', 'director', 'docente'] },
+    maxLength: { firstName: 80, middleName: 80, lastName: 80, secondLastName: 80, email: 254, username: 40, passwordHash: 255, documentNumber: 40, studentCode: 40, role: 20, phone: 30, personalEmail: 254, program: 160, profilePhoto: 7000000 },
+    validate(values) {
+        validate(values.role === 'administrador' ? /^[a-z0-9._-]{3,40}$/i.test(values.username || '') : Boolean(values.email),
+            values.role === 'administrador' ? 'El administrador necesita un nombre de usuario válido.' : 'El correo es obligatorio para roles académicos.');
+            validate(values.role === 'director'
+                ? Boolean(values.programId)
+                : values.role === 'estudiante'
+                    ? (!values.program || Boolean(values.programId))
+                    : !values.programId && !values.program,
+            values.role === 'director'
+                ? 'El Director debe tener un programa académico.'
+                : values.role === 'estudiante'
+                    ? 'El programa académico del Estudiante debe estar registrado.'
+                    : 'El programa académico solo se asigna a Directores y Estudiantes.');
+        validate(!values.username || /^[a-z0-9._-]{1,40}$/i.test(values.username), 'El nombre de usuario no es válido.');
+        validate(validEmail(values.email) && validEmail(values.personalEmail), 'El correo debe tener un formato válido.');
+        validate(values.semester == null || (Number(values.semester) >= 1 && Number(values.semester) <= 20), 'El semestre no es válido.');
     },
-    username: {
-        type: String,
-        required: function () { return this.role === 'administrador'; },
-        unique: true,
-        sparse: true,
-        trim: true,
-        lowercase: true,
-        maxlength: 40,
-        match: /^[a-z0-9._-]+$/
+    links: {
+        subjects: { table: null },
+        assignedTeachers: { table: ['student_teachers', 'student_id', 'teacher_id'] },
+        assignedDirectors: { table: ['student_directors', 'student_id', 'director_id'] }
     },
-    passwordHash: { type: String, required: true, select: false },
-    documentNumber: { type: String, trim: true, sparse: true, unique: true, maxlength: 40 },
-    studentCode: { type: String, trim: true, sparse: true, unique: true, maxlength: 40 },
-    subjects: [{ type: objectId, ref: 'AcademicSubject' }],
-    role: { type: String, required: true, enum: ['administrador', 'estudiante', 'asesor', 'director', 'docente'] },
-    phone: { type: String, trim: true, maxlength: 30 },
-    personalEmail: {
-        type: String,
-        trim: true,
-        lowercase: true,
-        maxlength: 254,
-        validate: {
-            validator: value => !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
-            message: 'El correo personal debe tener un formato válido.'
-        }
+    references: { programId: 'AcademicProgram' }
+});
+
+const Institution = buildModel('Institution', {
+    id: 'id', name: 'name', address: 'address', practiceName: 'practice_name',
+    advisorName: 'advisor_name', type: 'institution_type', agreementActive: 'agreement_active',
+    active: 'active', contactName: 'contact_name', contactEmail: 'contact_email',
+    contactPhone: 'contact_phone', createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    booleans: ['agreementActive', 'active'], required: ['name'],
+    defaults: { agreementActive: false, active: true },
+    maxLength: { name: 180, address: 250, practiceName: 160, advisorName: 160, type: 100, contactName: 160, contactEmail: 254, contactPhone: 30 },
+    links: { semesters: { table: ['institution_semesters', 'institution_id', 'semester'] } }
+});
+
+const AcademicProgram = buildModel('AcademicProgram', {
+    id: 'id', name: 'name', director: 'director_id', active: 'active',
+    createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    booleans: ['active'], required: ['name'], defaults: { active: true },
+    maxLength: { name: 160 }, links: {
+        teachers: { table: ['program_teachers', 'program_id', 'teacher_id'] },
+        directors: { table: ['program_directors', 'program_id', 'director_id'] }
     },
-    profilePhoto: { type: String, maxlength: 7000000, select: false },
-    program: { type: String, trim: true, maxlength: 160 },
-    programId: { type: objectId, ref: 'AcademicProgram' },
-    semester: { type: Number, min: 1, max: 20 },
-    active: { type: Boolean, default: true }
-}, { timestamps: true });
+    references: { director: 'User' }
+});
 
-const institutionSchema = new Schema({
-    name: { type: String, required: true, trim: true, maxlength: 180 },
-    address: { type: String, trim: true, maxlength: 250 },
-    semesters: [{ type: Number, min: 1, max: 20 }],
-    practiceName: { type: String, trim: true, maxlength: 160 },
-    advisorName: { type: String, trim: true, maxlength: 160 },
-    type: { type: String, trim: true, maxlength: 100 },
-    agreementActive: { type: Boolean, default: false },
-    active: { type: Boolean, default: true },
-    contactName: { type: String, trim: true, maxlength: 160 },
-    contactEmail: { type: String, trim: true, lowercase: true, maxlength: 254 },
-    contactPhone: { type: String, trim: true, maxlength: 30 }
-}, { timestamps: true });
+const AcademicSubject = buildModel('AcademicSubject', {
+    id: 'id', name: 'name', code: 'code', semester: 'semester', active: 'active',
+    createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    booleans: ['active'], required: ['name', 'code', 'semester'], defaults: { active: true },
+    maxLength: { name: 160, code: 40 },
+    validate(values) {
+        validate(values.semester == null || (Number(values.semester) >= 1 && Number(values.semester) <= 20), 'El semestre no es válido.');
+    },
+    links: {
+        teachers: { table: ['subject_teachers', 'subject_id', 'teacher_id'] },
+        students: { table: ['subject_students', 'subject_id', 'student_id'] }
+    }
+});
 
-institutionSchema.index({ name: 1 }, { unique: true });
+const PracticeType = buildModel('PracticeType', {
+    id: 'id', name: 'name', semester: 'semester', description: 'description',
+    requiredHours: 'required_hours', active: 'active', createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    booleans: ['active'], required: ['name'], defaults: { requiredHours: 0, active: true },
+    maxLength: { name: 160, description: 2000 },
+    validate(values) {
+        validate(values.requiredHours == null || Number(values.requiredHours) >= 0, 'Las horas requeridas no pueden ser negativas.');
+    }
+});
 
-const academicSubjectSchema = new Schema({
-    name: { type: String, required: true, trim: true, maxlength: 160 },
-    code: { type: String, required: true, trim: true, uppercase: true, maxlength: 40 },
-    semester: { type: Number, min: 1, max: 20 },
-    teachers: [{ type: objectId, ref: 'User' }],
-    students: [{ type: objectId, ref: 'User' }],
-    active: { type: Boolean, default: true }
-}, { timestamps: true });
+const PracticeAssignment = buildModel('PracticeAssignment', {
+    id: 'id', practiceType: 'practice_type_id', program: 'program_id', student: 'student_id', teacher: 'teacher_id',
+    accompanimentResponsible: 'advisor_id', institution: 'institution_id', academicPeriod: 'academic_period',
+    startDate: 'start_date', endDate: 'end_date', requiredHours: 'required_hours', status: 'status', approvalStatus: 'approval_status',
+    approvalComment: 'approval_comment', approvedBy: 'approved_by', approvedAt: 'approved_at',
+    description: 'description', createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    required: ['practiceType', 'program', 'student', 'teacher', 'institution', 'startDate', 'endDate'],
+    defaults: { status: 'disponible', approvalStatus: 'pendiente' },
+    enums: { status: ['disponible', 'en_curso', 'finalizada', 'cancelada'], approvalStatus: ['pendiente', 'aprobada', 'rechazada'] },
+    maxLength: { academicPeriod: 30, approvalComment: 2000, description: 2000 },
+    validate(values) {
+        validate(!values.startDate || !values.endDate || new Date(values.endDate) >= new Date(values.startDate), 'La fecha final debe ser igual o posterior a la fecha inicial.');
+        validate(values.requiredHours == null || (Number(values.requiredHours) >= 0 && Number(values.requiredHours) <= 99999.9), 'Las horas requeridas no son válidas.');
+    },
+    links: { teachers: { table: ['practice_assignment_teachers', 'assignment_id', 'teacher_id'] } },
+    references: {
+        practiceType: 'PracticeType', program: 'AcademicProgram', student: 'User', teacher: 'User',
+        accompanimentResponsible: 'User', institution: 'Institution', approvedBy: 'User'
+    }
+});
 
-const academicProgramSchema = new Schema({
-    name: { type: String, required: true, trim: true, maxlength: 160 },
-    director: { type: objectId, ref: 'User', default: null },
-    teachers: [{ type: objectId, ref: 'User' }],
-    active: { type: Boolean, default: true }
-}, { timestamps: true });
+const Activity = buildModel('Activity', {
+    id: 'id', assignment: 'assignment_id', subject: 'subject_id', author: 'author_id',
+    title: 'title', instructions: 'instructions', dueDate: 'due_date', status: 'status',
+    resourceUrl: 'resource_url', createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    required: ['author', 'title', 'instructions'], defaults: { status: 'activa' },
+    enums: { status: ['programada', 'activa', 'finalizada'] },
+    maxLength: { title: 180, instructions: 5000, resourceUrl: 2048 },
+    references: { assignment: 'PracticeAssignment', subject: 'AcademicSubject', author: 'User' }
+});
 
-academicProgramSchema.index({ name: 1 }, { unique: true });
-academicProgramSchema.index({ director: 1 });
+const Submission = buildModel('Submission', {
+    id: 'id', activity: 'activity_id', assignment: 'assignment_id', student: 'student_id',
+    response: 'response', feedback: 'feedback', submittedAt: 'submitted_at',
+    status: 'status', createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    required: ['activity', 'student'], defaults: { status: 'en_revision', submittedAt: new Date() },
+    enums: { status: ['pendiente', 'en_revision', 'aprobada', 'requiere_cambios'] },
+    maxLength: { response: 10000, feedback: 5000 },
+    references: { activity: 'Activity', assignment: 'PracticeAssignment', student: 'User' },
+    links: { evidence: { table: ['submission_evidence', 'submission_id', 'id'] } }
+});
 
-academicSubjectSchema.index({ name: 1 }, { unique: true });
-academicSubjectSchema.index({ code: 1 }, { unique: true });
+const Observation = buildModel('Observation', {
+    id: 'id', assignment: 'assignment_id', student: 'student_id', author: 'author_id',
+    category: 'category', body: 'body', observedAt: 'observed_at',
+    visibleToStudent: 'visible_to_student', createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    booleans: ['visibleToStudent'], required: ['assignment', 'student', 'author', 'body'],
+    defaults: { visibleToStudent: true }, maxLength: { category: 100, body: 5000 },
+    references: { assignment: 'PracticeAssignment', student: 'User', author: 'User' }
+});
 
-const practiceTypeSchema = new Schema({
-    name: { type: String, required: true, trim: true, maxlength: 160 },
-    semester: { type: Number, min: 1, max: 20 },
-    description: { type: String, trim: true, maxlength: 2000 },
-    requiredHours: { type: Number, min: 0, default: 0 },
-    active: { type: Boolean, default: true }
-}, { timestamps: true });
+const Evaluation = buildModel('Evaluation', {
+    id: 'id', assignment: 'assignment_id', student: 'student_id', evaluator: 'evaluator_id',
+    activity: 'activity_id', submission: 'submission_id', score: 'score', feedback: 'feedback',
+    evaluatedAt: 'evaluated_at', createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    required: ['assignment', 'student', 'evaluator', 'score', 'feedback'],
+    maxLength: { feedback: 5000 },
+    validate(values) {
+        validate(Number(values.score) >= 0 && Number(values.score) <= 5, 'La calificación debe estar entre 0 y 5.');
+    },
+    references: { assignment: 'PracticeAssignment', student: 'User', evaluator: 'User', activity: 'Activity', submission: 'Submission' }
+});
 
-practiceTypeSchema.index({ name: 1, semester: 1 }, { unique: true });
+const StudentNotification = buildModel('StudentNotification', {
+    id: 'id', recipient: 'recipient_id', actor: 'actor_id', type: 'notification_type',
+    title: 'title', message: 'message', view: 'view_name', readAt: 'read_at',
+    createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    required: ['recipient', 'type', 'title', 'message', 'view'],
+    enums: { type: ['evaluation', 'observation', 'submission', 'practiceLog', 'practice', 'activity'] },
+    maxLength: { type: 30, title: 160, message: 1000, view: 60 },
+    references: { recipient: 'User', actor: 'User' }
+});
 
-const practiceAssignmentSchema = new Schema({
-    practiceType: { type: objectId, ref: 'PracticeType', required: true },
-    student: { type: objectId, ref: 'User', required: true },
-    teacher: { type: objectId, ref: 'User', required: true },
-    accompanimentResponsible: { type: objectId, ref: 'User' },
-    institution: { type: objectId, ref: 'Institution', required: true },
-    academicPeriod: { type: String, trim: true, maxlength: 30 },
-    startDate: { type: Date, required: true },
-    endDate: { type: Date, required: true },
-    status: { type: String, enum: ['disponible', 'en_curso', 'finalizada', 'cancelada'], default: 'disponible' },
-    approvalStatus: { type: String, enum: ['pendiente', 'aprobada', 'rechazada'], default: 'pendiente' },
-    approvalComment: { type: String, trim: true, maxlength: 2000 },
-    approvedBy: { type: objectId, ref: 'User' },
-    approvedAt: { type: Date },
-    description: { type: String, trim: true, maxlength: 2000 }
-}, { timestamps: true });
+const PracticeLog = buildModel('PracticeLog', {
+    id: 'id', assignment: 'assignment_id', student: 'student_id', date: 'log_date',
+    hours: 'hours', activityDescription: 'activity_description', status: 'status',
+    reviewedBy: 'reviewed_by', reviewComment: 'review_comment', createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    required: ['assignment', 'student', 'date', 'hours', 'activityDescription'],
+    defaults: { status: 'pendiente' }, enums: { status: ['pendiente', 'aprobada', 'rechazada'] },
+    maxLength: { activityDescription: 3000, reviewComment: 2000 },
+    validate(values) {
+        validate(Number(values.hours) >= 0.1 && Number(values.hours) <= 24, 'Las horas deben estar entre 0.1 y 24.');
+    },
+    references: { assignment: 'PracticeAssignment', student: 'User', reviewedBy: 'User' }
+});
 
-practiceAssignmentSchema.index({ student: 1, academicPeriod: 1 });
-practiceAssignmentSchema.index({ teacher: 1, status: 1 });
-practiceAssignmentSchema.path('endDate').validate(function (endDate) {
-    return !this.startDate || !endDate || endDate >= this.startDate;
-}, 'La fecha final debe ser igual o posterior a la fecha inicial.');
+const PracticeVisit = buildModel('PracticeVisit', {
+    id: 'id', assignment: 'assignment_id', tutor: 'tutor_id', visitDate: 'visit_date',
+    observation: 'observation', agreements: 'agreements', status: 'status',
+    createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    required: ['assignment', 'tutor', 'visitDate', 'observation'],
+    defaults: { status: 'programada' }, enums: { status: ['programada', 'realizada'] },
+    maxLength: { observation: 5000, agreements: 3000 },
+    references: { assignment: 'PracticeAssignment', tutor: 'User' }
+});
 
-const activitySchema = new Schema({
-    assignment: { type: objectId, ref: 'PracticeAssignment' },
-    subject: { type: objectId, ref: 'AcademicSubject' },
-    author: { type: objectId, ref: 'User', required: true },
-    title: { type: String, required: true, trim: true, maxlength: 180 },
-    instructions: { type: String, required: true, trim: true, maxlength: 5000 },
-    dueDate: { type: Date },
-    status: { type: String, enum: ['programada', 'activa', 'finalizada'], default: 'activa' },
-    resourceUrl: { type: String, trim: true, maxlength: 2048 }
-}, { timestamps: true });
+const AttendanceValidation = buildModel('AttendanceValidation', {
+    id: 'id', assignment: 'assignment_id', student: 'student_id', advisor: 'advisor_id',
+    date: 'validation_date', attendanceStatus: 'attendance_status', performanceScore: 'performance_score',
+    comments: 'comments', createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    required: ['assignment', 'student', 'advisor', 'date', 'attendanceStatus', 'performanceScore', 'comments'],
+    enums: { attendanceStatus: ['presente', 'ausente', 'tardanza'] },
+    maxLength: { comments: 3000 },
+    validate(values) {
+        validate(Number(values.performanceScore) >= 0 && Number(values.performanceScore) <= 5, 'El desempeño debe estar entre 0 y 5.');
+    },
+    references: { assignment: 'PracticeAssignment', student: 'User', advisor: 'User' }
+});
 
-activitySchema.index({ assignment: 1, status: 1 });
-activitySchema.index({ subject: 1, status: 1 });
+const AdminAudit = buildModel('AdminAudit', {
+    id: 'id', actor: 'actor_id', actorName: 'actor_name', action: 'action',
+    entity: 'entity', entityId: 'entity_id', summary: 'summary', createdAt: 'created_at'
+}, {
+    required: ['actor', 'actorName', 'action', 'entity', 'entityId', 'summary'],
+    enums: {
+        action: ['created', 'updated', 'deleted', 'activated', 'deactivated'],
+        entity: ['user', 'program', 'subject', 'institution', 'practiceType', 'assignment', 'activity', 'submission', 'observation', 'evaluation', 'practiceLog', 'practiceVisit', 'attendanceValidation', 'passwordRecovery']
+    },
+    maxLength: { actorName: 170, entityId: 80, summary: 300 },
+    references: { actor: 'User' }
+});
 
-const evidenceSchema = new Schema({
-    name: { type: String, required: true, trim: true, maxlength: 255 },
-    url: { type: String, required: true, trim: true, maxlength: 2048 },
-    mimeType: { type: String, trim: true, maxlength: 120 },
-    sizeBytes: { type: Number, min: 0 }
-}, { _id: false });
+const PasswordRecoveryRequest = buildModel('PasswordRecoveryRequest', {
+    id: 'id', fullName: 'full_name', contactEmail: 'contact_email',
+    accountIdentifier: 'account_identifier', requestType: 'request_type', status: 'status',
+    targetUser: 'target_user_id', handledBy: 'handled_by_id', handledAt: 'handled_at',
+    createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    required: ['fullName', 'contactEmail', 'requestType'],
+    defaults: { status: 'pendiente' },
+    enums: { requestType: ['usuario', 'contrasena', 'ambos'], status: ['pendiente', 'resuelta', 'descartada'] },
+    maxLength: { fullName: 160, contactEmail: 254, accountIdentifier: 254 },
+    references: { targetUser: 'User', handledBy: 'User' }
+});
 
-const submissionSchema = new Schema({
-    activity: { type: objectId, ref: 'Activity', required: true },
-    assignment: { type: objectId, ref: 'PracticeAssignment' },
-    student: { type: objectId, ref: 'User', required: true },
-    response: { type: String, trim: true, maxlength: 10000 },
-    evidence: { type: [evidenceSchema], default: [] },
-    feedback: { type: String, trim: true, maxlength: 5000 },
-    submittedAt: { type: Date, default: Date.now },
-    status: { type: String, enum: ['pendiente', 'en_revision', 'aprobada', 'requiere_cambios'], default: 'en_revision' }
-}, { timestamps: true });
-
-submissionSchema.index({ activity: 1, student: 1 }, { unique: true });
-
-const observationSchema = new Schema({
-    assignment: { type: objectId, ref: 'PracticeAssignment', required: true },
-    student: { type: objectId, ref: 'User', required: true },
-    author: { type: objectId, ref: 'User', required: true },
-    category: { type: String, trim: true, maxlength: 100 },
-    body: { type: String, required: true, trim: true, maxlength: 5000 },
-    observedAt: { type: Date, default: Date.now },
-    visibleToStudent: { type: Boolean, default: true }
-}, { timestamps: true });
-
-const evaluationSchema = new Schema({
-    assignment: { type: objectId, ref: 'PracticeAssignment', required: true },
-    student: { type: objectId, ref: 'User', required: true },
-    evaluator: { type: objectId, ref: 'User', required: true },
-    activity: { type: objectId, ref: 'Activity' },
-    submission: { type: objectId, ref: 'Submission' },
-    score: { type: Number, required: true, min: 0, max: 5 },
-    feedback: { type: String, required: true, trim: true, maxlength: 5000 },
-    evaluatedAt: { type: Date, default: Date.now }
-}, { timestamps: true });
-
-const studentNotificationSchema = new Schema({
-    recipient: { type: objectId, ref: 'User', required: true, index: true },
-    actor: { type: objectId, ref: 'User', default: null },
-    type: { type: String, required: true, enum: ['evaluation', 'observation', 'submission', 'practiceLog', 'practice', 'activity'] },
-    title: { type: String, required: true, trim: true, maxlength: 160 },
-    message: { type: String, required: true, trim: true, maxlength: 1000 },
-    view: { type: String, required: true, trim: true, maxlength: 60 },
-    readAt: { type: Date, default: null }
-}, { timestamps: true });
-
-studentNotificationSchema.index({ recipient: 1, readAt: 1, createdAt: -1 });
-
-const practiceLogSchema = new Schema({
-    assignment: { type: objectId, ref: 'PracticeAssignment', required: true },
-    student: { type: objectId, ref: 'User', required: true },
-    date: { type: Date, required: true },
-    hours: { type: Number, required: true, min: 0.1, max: 24 },
-    activityDescription: { type: String, required: true, trim: true, maxlength: 3000 },
-    status: { type: String, enum: ['pendiente', 'aprobada', 'rechazada'], default: 'pendiente' },
-    reviewedBy: { type: objectId, ref: 'User' },
-    reviewComment: { type: String, trim: true, maxlength: 2000 }
-}, { timestamps: true });
-
-practiceLogSchema.index({ assignment: 1, date: -1 });
-
-const adminAuditSchema = new Schema({
-    actor: { type: objectId, ref: 'User', required: true },
-    actorName: { type: String, required: true, trim: true, maxlength: 170 },
-    action: { type: String, required: true, enum: ['created', 'updated', 'deleted', 'activated', 'deactivated'] },
-    entity: { type: String, required: true, enum: ['user', 'program', 'subject', 'institution', 'practiceType', 'assignment', 'activity', 'submission', 'observation', 'evaluation', 'practiceLog', 'passwordRecovery'] },
-    entityId: { type: String, required: true, maxlength: 80 },
-    summary: { type: String, required: true, trim: true, maxlength: 300 }
-}, { timestamps: { createdAt: true, updatedAt: false } });
-
-adminAuditSchema.index({ createdAt: -1 });
-
-const passwordRecoveryRequestSchema = new Schema({
-    fullName: { type: String, required: true, trim: true, maxlength: 160 },
-    contactEmail: { type: String, required: true, trim: true, lowercase: true, maxlength: 254 },
-    accountIdentifier: { type: String, trim: true, lowercase: true, maxlength: 254 },
-    requestType: { type: String, required: true, enum: ['usuario', 'contrasena', 'ambos'] },
-    status: { type: String, enum: ['pendiente', 'resuelta', 'descartada'], default: 'pendiente' },
-    targetUser: { type: objectId, ref: 'User', default: null },
-    handledBy: { type: objectId, ref: 'User', default: null },
-    handledAt: { type: Date }
-}, { timestamps: true });
-
-passwordRecoveryRequestSchema.index({ status: 1, createdAt: -1 });
-
-module.exports = {
-    User: mongoose.model('User', userSchema),
-    Institution: mongoose.model('Institution', institutionSchema),
-    AcademicProgram: mongoose.model('AcademicProgram', academicProgramSchema),
-    AcademicSubject: mongoose.model('AcademicSubject', academicSubjectSchema),
-    PracticeType: mongoose.model('PracticeType', practiceTypeSchema),
-    PracticeAssignment: mongoose.model('PracticeAssignment', practiceAssignmentSchema),
-    Activity: mongoose.model('Activity', activitySchema),
-    Submission: mongoose.model('Submission', submissionSchema),
-    Observation: mongoose.model('Observation', observationSchema),
-    Evaluation: mongoose.model('Evaluation', evaluationSchema),
-    StudentNotification: mongoose.model('StudentNotification', studentNotificationSchema),
-    PracticeLog: mongoose.model('PracticeLog', practiceLogSchema),
-    AdminAudit: mongoose.model('AdminAudit', adminAuditSchema),
-    PasswordRecoveryRequest: mongoose.model('PasswordRecoveryRequest', passwordRecoveryRequestSchema)
+const models = {
+    User, Institution, AcademicProgram, AcademicSubject, PracticeType, PracticeAssignment,
+    Activity, Submission, Observation, Evaluation, StudentNotification, PracticeLog,
+    PracticeVisit, AttendanceValidation, AdminAudit, PasswordRecoveryRequest
 };
+
+setModelRegistry(models);
+module.exports = models;

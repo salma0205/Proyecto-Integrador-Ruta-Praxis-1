@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const {
@@ -17,6 +18,8 @@ const {
 } = require('../models');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { isValidPassword } = require('../utils/password');
+const syncUserProgramAssignments = require('../utils/sync-user-program-assignments');
+const assertInstitutionData = require('../utils/institution-validation');
 
 const router = express.Router();
 
@@ -24,32 +27,37 @@ router.get('/teacher/students', requireAuth, requireRole('docente'), async (req,
     try {
         const teacher = await User.findById(req.user.id).select('_id');
         if (!teacher) return res.status(404).json({ error: 'No se encontró el usuario docente.' });
-        const subjects = await AcademicSubject.find({ active: true, teachers: teacher._id }).populate({
-            path: 'students',
-            match: { active: true },
-            select: 'firstName middleName lastName secondLastName email studentCode semester'
-        });
-        const data = subjects.flatMap(subject => {
-            const students = new Map();
-            (subject.students || []).forEach(student => students.set(String(student._id), student));
-            return [...students.values()]
-                .filter(student => !subject.semester || Number(student.semester) === Number(subject.semester))
-                .map(student => ({
-                _id: student._id,
-                firstName: student.firstName,
-                middleName: student.middleName || '',
-                lastName: student.lastName,
-                secondLastName: student.secondLastName || '',
-                email: student.email || '',
-                studentCode: student.studentCode || '',
-                semester: student.semester || subject.semester || null,
-                subject: {
-                    _id: subject._id,
-                    name: subject.name,
-                    code: subject.code,
-                    semester: subject.semester || null
-                }
-            }));
+        const [students, assignments] = await Promise.all([
+            User.find({ role: 'estudiante', active: true, assignedTeachers: teacher._id })
+                .select('firstName middleName lastName secondLastName email studentCode semester')
+                .sort({ lastName: 1, firstName: 1 }),
+            PracticeAssignment.find({ teachers: teacher._id })
+                .populate('student', 'firstName middleName lastName secondLastName email studentCode semester active')
+                .populate('practiceType', 'name semester')
+        ]);
+        const practiceByStudent = new Map();
+        assignments.filter(assignment => assignment.student && assignment.student.active !== false)
+            .forEach(assignment => {
+                const studentId = String(assignment.student._id);
+                if (!practiceByStudent.has(studentId)) practiceByStudent.set(studentId, []);
+                practiceByStudent.get(studentId).push({
+                    name: assignment.practiceType?.name || 'Práctica',
+                    semester: assignment.practiceType?.semester || assignment.student.semester || null
+                });
+            });
+        const data = students.flatMap(student => {
+            const practices = practiceByStudent.get(String(student._id)) || [{ name: 'Sin práctica asignada', semester: student.semester }];
+            return practices.map(practice => ({
+                    _id: student._id,
+                    firstName: student.firstName,
+                    middleName: student.middleName || '',
+                    lastName: student.lastName,
+                    secondLastName: student.secondLastName || '',
+                    email: student.email || '',
+                    studentCode: student.studentCode || '',
+                    semester: student.semester || practice.semester || null,
+                    practice
+                }));
         });
         res.json({ data });
     } catch (error) {
@@ -88,29 +96,18 @@ router.get('/admin/summary', async (req, res, next) => {
             assignments,
             approvedLogs,
             evaluatedAssignments,
-            programsCount,
-            directorsCount,
-            academicUsersCount,
-            typesCount,
-            programsWithDirector,
-            recentActivity
         ] = await Promise.all([
             User.countDocuments(),
             User.countDocuments({ active: true }),
             AcademicSubject.countDocuments({ active: true }),
             Institution.countDocuments({ active: true }),
             PracticeAssignment.countDocuments({ status: 'en_curso' }),
-            PracticeAssignment.find().select('practiceType').populate('practiceType', 'requiredHours').limit(1000),
+            PracticeAssignment.find().select('practiceType requiredHours').populate('practiceType', 'requiredHours').limit(1000),
             PracticeLog.find({ status: 'aprobada' }).select('hours'),
-            Evaluation.distinct('assignment'),
-            AcademicProgram.countDocuments({ active: true }),
-            User.countDocuments({ role: 'director', active: true }),
-            User.countDocuments({ role: { $in: ['estudiante', 'docente', 'asesor'] }, active: true }),
-            PracticeType.countDocuments({ active: true }),
-            AcademicProgram.countDocuments({ active: true, director: { $ne: null } }),
-            AdminAudit.find().sort({ createdAt: -1 }).limit(8).select('actorName action entity entityId summary createdAt').lean()
+            Evaluation.distinct('assignment')
         ]);
-        const requiredHours = assignments.reduce((sum, item) => sum + (item.practiceType?.requiredHours || 0), 0);
+        const requiredHours = assignments.reduce((sum, item) =>
+            sum + (Number(item.requiredHours) || Number(item.practiceType?.requiredHours) || 0), 0);
         const approvedHours = approvedLogs.reduce((sum, item) => sum + item.hours, 0);
         res.json({
             data: {
@@ -120,18 +117,12 @@ router.get('/admin/summary', async (req, res, next) => {
                 activeInstitutions,
                 activeAssignments,
                 pendingApprovals: await PracticeAssignment.countDocuments({ approvalStatus: 'pendiente' }),
-                programsCount,
-                directorsCount,
-                academicUsersCount,
-                typesCount,
-                programsWithDirector,
                 approvedHours,
                 requiredHours,
                 hoursPercent: requiredHours ? Math.min(100, Math.round(approvedHours / requiredHours * 100)) : 0,
                 evaluationCoverage: assignments.length
                     ? Math.round(evaluatedAssignments.length / assignments.length * 100)
-                    : 0,
-                recentActivity
+                    : 0
             }
         });
     } catch (error) {
@@ -330,8 +321,10 @@ router.get('/admin/users', async (req, res, next) => {
                 .skip((page - 1) * limit)
                 .limit(limit)
                 .select('-passwordHash')
-                .populate('subjects', 'name')
+                .populate('subjects', 'name semester')
                 .populate('programId', 'name')
+                .populate('assignedTeachers', 'firstName middleName lastName secondLastName role active')
+                .populate('assignedDirectors', 'firstName middleName lastName secondLastName role active')
                 .lean(),
             User.countDocuments(filter)
         ]);
@@ -345,12 +338,11 @@ router.get('/admin/users', async (req, res, next) => {
 });
 
 const resources = {
-    users: { model: User, fields: ['firstName', 'middleName', 'lastName', 'secondLastName', 'email', 'username', 'documentNumber', 'role', 'phone', 'program', 'programId', 'semester', 'active'], populate: ['subjects', 'programId'], references: { programId: AcademicProgram } },
-    programs: { model: AcademicProgram, fields: ['name', 'director', 'teachers', 'active'], populate: ['director', 'teachers'], references: { director: { model: User, role: 'director' }, teachers: { model: User, role: 'docente' } } },
-    subjects: { model: AcademicSubject, fields: ['name', 'code', 'semester', 'teachers', 'students', 'active'], populate: ['teachers', 'students'], references: { teachers: { model: User, role: 'docente' }, students: { model: User, role: 'estudiante' } } },
-    institutions: { model: Institution, fields: ['name', 'address', 'semesters', 'practiceName', 'advisorName', 'type', 'agreementActive', 'active', 'contactName', 'contactEmail', 'contactPhone'] },
+    users: { model: User, fields: ['firstName', 'middleName', 'lastName', 'secondLastName', 'email', 'username', 'documentNumber', 'role', 'phone', 'program', 'programId', 'semester', 'subjects', 'assignedTeachers', 'assignedDirectors', 'active'], populate: ['subjects', 'programId', 'assignedTeachers', 'assignedDirectors'], references: { programId: AcademicProgram, subjects: AcademicSubject, assignedTeachers: { model: User, role: 'docente' }, assignedDirectors: { model: User, role: 'director' } } },
+    programs: { model: AcademicProgram, fields: ['name', 'active'], populate: ['director', 'directors', 'teachers'], references: { director: { model: User, role: 'director' }, directors: { model: User, role: 'director' }, teachers: { model: User, role: 'docente' } } },
+    subjects: { model: AcademicSubject, fields: ['name', 'code', 'semester', 'active'] },
+    institutions: { model: Institution, fields: ['name', 'address', 'semesters', 'active'] },
     practiceTypes: { model: PracticeType, fields: ['name', 'semester', 'description', 'requiredHours', 'active'] },
-    assignments: { model: PracticeAssignment, fields: ['practiceType', 'student', 'teacher', 'accompanimentResponsible', 'institution', 'academicPeriod', 'startDate', 'endDate', 'status', 'description'], populate: ['practiceType', 'student', 'teacher', 'accompanimentResponsible', 'institution', 'approvedBy'], references: { practiceType: PracticeType, student: { model: User, role: 'estudiante' }, teacher: { model: User, role: 'docente' }, accompanimentResponsible: { model: User, role: 'asesor' }, institution: Institution } },
     activities: { model: Activity, fields: ['assignment', 'author', 'title', 'instructions', 'dueDate', 'status', 'resourceUrl'], populate: ['assignment', 'author'], references: { assignment: PracticeAssignment, author: { model: User, role: 'docente' } } },
     submissions: { model: Submission, fields: ['activity', 'assignment', 'student', 'response', 'evidence', 'submittedAt', 'status'], populate: ['activity', 'assignment', 'student'], references: { activity: Activity, assignment: PracticeAssignment, student: { model: User, role: 'estudiante' } } },
     observations: { model: Observation, fields: ['assignment', 'student', 'author', 'category', 'body', 'observedAt', 'visibleToStudent'], populate: ['assignment', 'student', 'author'], references: { assignment: PracticeAssignment, student: { model: User, role: 'estudiante' }, author: { model: User, roles: ['asesor', 'docente'] } } },
@@ -393,8 +385,27 @@ async function validateReferences(data, references) {
 }
 
 async function validateUserProgram(data, requireActive = true) {
-    if (data.role && data.role !== 'administrador' && !data.programId) {
-        const error = new Error('Selecciona un programa académico para este usuario.');
+    const rolesWithProgram = ['director', 'estudiante'];
+    if (rolesWithProgram.includes(data.role) && !data.programId) {
+        const error = new Error(data.role === 'director'
+            ? 'Selecciona un programa académico para este Director.'
+            : 'Selecciona el programa académico del Estudiante.');
+        error.status = 400;
+        throw error;
+    }
+    if (data.role && !rolesWithProgram.includes(data.role) && data.programId) {
+        const error = new Error('El programa académico solo se asigna a Directores y Estudiantes.');
+        error.status = 400;
+        throw error;
+    }
+    if (data.role && !rolesWithProgram.includes(data.role) && data.program) {
+        const error = new Error('El programa académico solo se asigna a Directores y Estudiantes.');
+        error.status = 400;
+        throw error;
+    }
+    if (rolesWithProgram.includes(data.role) &&
+        (!Number.isInteger(Number(data.semester)) || Number(data.semester) < 1 || Number(data.semester) > 10)) {
+        const error = new Error('Asigna un semestre entre 1 y 10 a este usuario.');
         error.status = 400;
         throw error;
     }
@@ -423,15 +434,91 @@ async function validateSubjectStudentSemesters(data) {
     }
 }
 
+async function validateUserSubjectAssignments(data) {
+    if (data.subjects === undefined) return;
+    if (!Array.isArray(data.subjects)) {
+        const error = new Error('Las asignaturas deben enviarse como una lista.');
+        error.status = 400;
+        throw error;
+    }
+    const subjectIds = [...new Set(data.subjects.map(String).filter(Boolean))];
+    if (!['docente', 'estudiante'].includes(data.role)) {
+        if (subjectIds.length) {
+            const error = new Error('Solo los Docentes y Estudiantes pueden tener asignaturas asignadas.');
+            error.status = 400;
+            throw error;
+        }
+        return;
+    }
+    if (!subjectIds.length) {
+        if (data.role === 'estudiante') {
+            const error = new Error('Asigna al menos una asignatura del semestre del Estudiante.');
+            error.status = 400;
+            throw error;
+        }
+        return;
+    }
+    const subjects = await AcademicSubject.find({ _id: { $in: subjectIds } }).select('semester');
+    if (data.role === 'estudiante' && (data.semester == null || subjects.length !== subjectIds.length ||
+        subjects.some(subject => Number(subject.semester) !== Number(data.semester)))) {
+        const error = new Error('Solo puedes asignar asignaturas del mismo semestre que el Estudiante.');
+        error.status = 400;
+        throw error;
+    }
+}
+
+async function validateUserStudentAssignments(data) {
+    if (data.role !== 'estudiante') return;
+    const teacherIds = [...new Set((data.assignedTeachers || []).map(String).filter(Boolean))];
+    const directorIds = [...new Set((data.assignedDirectors || []).map(String).filter(Boolean))];
+    if (!teacherIds.length) {
+        const error = new Error('Asigna al menos un Docente al Estudiante.');
+        error.status = 400;
+        throw error;
+    }
+    if (directorIds.length > 1) {
+        const error = new Error('Un Estudiante puede tener como máximo un Director asignado.');
+        error.status = 400;
+        throw error;
+    }
+
+    const teachers = await User.find({ _id: { $in: teacherIds }, role: 'docente', active: true }).select('_id');
+    if (teachers.length !== teacherIds.length) {
+        const error = new Error('Todos los docentes asignados deben existir y estar activos.');
+        error.status = 400;
+        throw error;
+    }
+    const subjects = await AcademicSubject.find({ active: true, semester: Number(data.semester) })
+        .populate('teachers', '_id');
+    const availableTeacherIds = new Set(subjects.flatMap(subject =>
+        (subject.teachers || []).map(teacher => String(teacher._id))
+    ));
+    if (teacherIds.some(id => !availableTeacherIds.has(id))) {
+        const error = new Error('Cada Docente debe tener una asignatura activa del semestre del Estudiante.');
+        error.status = 400;
+        throw error;
+    }
+
+    if (directorIds.length === 1) {
+        const director = await User.findOne({
+            _id: directorIds[0],
+            role: 'director',
+            active: true,
+            programId: data.programId,
+            semester: Number(data.semester)
+        }).select('_id');
+        if (!director) {
+            const error = new Error('El Director debe estar activo y corresponder al mismo programa y semestre del Estudiante.');
+            error.status = 400;
+            throw error;
+        }
+    }
+}
+
 async function generateUserCode() {
     let code;
     do {
-        const counter = await User.db.collection('counters').findOneAndUpdate(
-            { _id: 'userCode' },
-            { $inc: { sequence: 1 } },
-            { upsert: true, returnDocument: 'after' }
-        );
-        code = `USR-${String(counter.sequence).padStart(6, '0')}`;
+        code = `USR-${String(crypto.randomInt(0, 1000000)).padStart(6, '0')}`;
     } while (await User.exists({ studentCode: code }));
     return code;
 }
@@ -443,21 +530,6 @@ async function syncUserSubjectAssignments(userId, role, subjects, previous = {})
     const oldSubjects = (previous.subjects || []).map(String);
     if (previousField && previousField !== currentField && oldSubjects.length) {
         await AcademicSubject.updateMany({ _id: { $in: oldSubjects } }, { $pull: { [previousField]: userId } });
-    }
-}
-
-async function syncSubjectUserAssignments(subjectId, previous, current) {
-    for (const [field, role] of [['teachers', 'docente'], ['students', 'estudiante']]) {
-        const oldIds = (previous[field] || []).map(String);
-        const newIds = (current[field] || []).map(String);
-        const removed = oldIds.filter(userId => !newIds.includes(userId));
-        const added = newIds.filter(userId => !oldIds.includes(userId));
-        if (removed.length) {
-            await User.updateMany({ _id: { $in: removed }, role }, { $pull: { subjects: subjectId } });
-        }
-        if (added.length) {
-            await User.updateMany({ _id: { $in: added }, role }, { $addToSet: { subjects: subjectId } });
-        }
     }
 }
 
@@ -505,12 +577,16 @@ for (const [path, resource] of Object.entries(resources)) {
                 await validateUserProgram(data);
             }
             await validateReferences(data, resource.references);
+            if (path === 'users') {
+                await validateUserSubjectAssignments(data);
+                await validateUserStudentAssignments(data);
+            }
             if (path === 'subjects') await validateSubjectStudentSemesters(data);
+            if (path === 'institutions') assertInstitutionData(data, true);
             const document = await model.create(data);
             if (path === 'users') {
                 await syncUserSubjectAssignments(document._id, document.role, document.subjects);
-            } else if (path === 'subjects') {
-                await syncSubjectUserAssignments(document._id, {}, document);
+                await syncUserProgramAssignments(AcademicProgram, document);
             }
             const entityNames = {
                 users: 'user', programs: 'program', subjects: 'subject', institutions: 'institution',
@@ -544,8 +620,9 @@ for (const [path, resource] of Object.entries(resources)) {
     router.patch(`${basePath}/:id`, async (req, res, next) => {
         try {
             const changes = pickAllowedFields(req.body, fields);
+            if (path === 'institutions') assertInstitutionData(changes);
             const previous = path === 'users'
-                ? await model.findById(req.params.id).select('role subjects')
+                ? await model.findById(req.params.id).select('role subjects programId semester assignedTeachers assignedDirectors')
                 : path === 'subjects'
                     ? await model.findById(req.params.id).select('teachers students')
                     : null;
@@ -553,7 +630,32 @@ for (const [path, resource] of Object.entries(resources)) {
                 return res.status(404).json({ error: 'Registro no encontrado.' });
             }
             if (path === 'users') {
-                await validateUserProgram(changes, false);
+                const role = changes.role || previous.role;
+                if (!['director', 'estudiante'].includes(role)) {
+                    if (changes.programId) {
+                        return res.status(400).json({ error: 'El programa académico solo se asigna a Directores y Estudiantes.' });
+                    }
+                    if (changes.role) {
+                        changes.programId = null;
+                        changes.program = null;
+                    }
+                } else {
+                    const programData = {
+                        ...changes,
+                        role,
+                        programId: changes.programId === undefined ? previous.programId : changes.programId,
+                        semester: changes.semester === undefined ? previous.semester : changes.semester
+                    };
+                    await validateUserProgram(programData, false);
+                    changes.program = programData.program;
+                }
+                if (changes.role && changes.role !== previous.role && !['docente', 'estudiante'].includes(role)) {
+                    changes.subjects = [];
+                }
+                if (changes.role && changes.role !== previous.role && role !== 'estudiante') {
+                    changes.assignedTeachers = [];
+                    changes.assignedDirectors = [];
+                }
             }
             if (path === 'users' && req.body.password) {
                 if (!isValidPassword(req.body.password)) {
@@ -576,6 +678,23 @@ for (const [path, resource] of Object.entries(resources)) {
             }
             const beforeActive = currentDocument.active;
             await validateReferences(changes, resource.references);
+            if (path === 'users' && (
+                changes.subjects !== undefined || changes.assignedTeachers !== undefined ||
+                changes.assignedDirectors !== undefined || changes.semester !== undefined ||
+                changes.programId !== undefined || changes.role
+            )) {
+                const userData = {
+                    ...changes,
+                    role: changes.role || previous.role,
+                    semester: changes.semester === undefined ? previous.semester : changes.semester,
+                    programId: changes.programId === undefined ? previous.programId : changes.programId,
+                    subjects: changes.subjects === undefined ? previous.subjects : changes.subjects,
+                    assignedTeachers: changes.assignedTeachers === undefined ? previous.assignedTeachers : changes.assignedTeachers,
+                    assignedDirectors: changes.assignedDirectors === undefined ? previous.assignedDirectors : changes.assignedDirectors
+                };
+                await validateUserSubjectAssignments(userData);
+                await validateUserStudentAssignments(userData);
+            }
             const document = await model.findByIdAndUpdate(req.params.id, changes, {
                 new: true,
                 runValidators: true,
@@ -584,8 +703,7 @@ for (const [path, resource] of Object.entries(resources)) {
             if (!document) return res.status(404).json({ error: 'Registro no encontrado.' });
             if (path === 'users') {
                 await syncUserSubjectAssignments(document._id, document.role, document.subjects, previous);
-            } else if (path === 'subjects') {
-                await syncSubjectUserAssignments(document._id, previous, document);
+                await syncUserProgramAssignments(AcademicProgram, document, previous);
             }
             const entityNames = {
                 users: 'user', programs: 'program', subjects: 'subject', institutions: 'institution',
@@ -626,13 +744,13 @@ for (const [path, resource] of Object.entries(resources)) {
                 }
             }
             if (path === 'users') {
-                const user = await model.findById(req.params.id).select('role subjects');
+                const user = await model.findById(req.params.id).select('role subjects assignedTeachers assignedDirectors');
                 if (!user) return res.status(404).json({ error: 'Registro no encontrado.' });
                 if (user.role === 'administrador' && await model.countDocuments({ role: 'administrador' }) <= 1) {
                     return res.status(409).json({ error: 'No puedes eliminar el último administrador.' });
                 }
                 if (await PracticeAssignment.exists({
-                    $or: [{ student: user._id }, { teacher: user._id }, { accompanimentResponsible: user._id }]
+                    $or: [{ student: user._id }, { teacher: user._id }, { teachers: user._id }, { accompanimentResponsible: user._id }]
                 })) {
                     return res.status(409).json({ error: 'No puedes eliminar un usuario vinculado a una práctica. Reasigna o finaliza primero sus prácticas.' });
                 }
@@ -646,6 +764,9 @@ for (const [path, resource] of Object.entries(resources)) {
                     return res.status(409).json({ error: 'No puedes eliminar un usuario con actividad o historial asociado. Conserva sus registros y desactiva la cuenta.' });
                 }
                 await syncUserSubjectAssignments(user._id, null, [], user);
+                await User.updateMany({ assignedTeachers: user._id }, { $pull: { assignedTeachers: user._id } });
+                await User.updateMany({ assignedDirectors: user._id }, { $pull: { assignedDirectors: user._id } });
+                await User.updateById(user._id, { assignedTeachers: [], assignedDirectors: [] });
                 await AcademicProgram.updateMany({ director: user._id }, { $set: { director: null } });
                 await AcademicProgram.updateMany({ teachers: user._id }, { $pull: { teachers: user._id } });
             }

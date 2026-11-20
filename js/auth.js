@@ -9,6 +9,7 @@
     const loginForm = document.getElementById('formulario-login');
     const setupForm = document.getElementById('formulario-administrador-inicial');
     const setupPanel = document.getElementById('configuracion-administrador');
+    const setupLink = document.getElementById('abrir-configuracion-administrador');
     const message = document.getElementById('mensaje-autenticacion');
     const roleSelect = document.getElementById('rol-acceso');
     const recoveryDialog = document.getElementById('dialogo-recuperacion');
@@ -68,12 +69,8 @@
 
         try {
             const setup = await request('/api/auth/setup-status');
-            if (setup.setupRequired && setupPanel) {
-                setupPanel.hidden = false;
-                loginForm.hidden = true;
-            } else if (loginForm) {
-                loginForm.hidden = false;
-            }
+            if (loginForm) loginForm.hidden = false;
+            if (setupLink) setupLink.hidden = !setup.setupRequired;
         } catch (error) {
             if (loginForm) loginForm.hidden = false;
             showMessage(error.message);
@@ -83,6 +80,15 @@
     if (loginForm) {
         document.querySelectorAll('[data-login-role]').forEach(button => {
             button.addEventListener('click', () => setLoginRole(button.dataset.loginRole));
+        });
+        setupLink?.addEventListener('click', () => {
+            loginForm.hidden = true;
+            if (setupPanel) setupPanel.hidden = false;
+        });
+        document.getElementById('volver-login')?.addEventListener('click', () => {
+            if (setupPanel) setupPanel.hidden = true;
+            loginForm.hidden = false;
+            showMessage('');
         });
         roleSelect?.addEventListener('change', () => setLoginRole(roleSelect.value));
         document.getElementById('abrir-recuperacion')?.addEventListener('click', () => {
