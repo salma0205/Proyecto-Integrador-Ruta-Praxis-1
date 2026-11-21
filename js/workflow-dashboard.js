@@ -41,6 +41,14 @@
     const assignmentName = item => item?.practiceType?.name || 'Práctica';
     const assignmentStudent = item => personName(item?.student);
     const dateText = value => value ? new Date(value).toLocaleDateString('es-CO') : 'Sin fecha';
+    const bogotaCalendarDate = value => {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit'
+        }).formatToParts(new Date(value));
+        const part = type => parts.find(item => item.type === type)?.value || '';
+        return `${part('year')}-${part('month')}-${part('day')}`;
+    };
+    const deadlinePassed = value => Boolean(value && bogotaCalendarDate(Date.now()) > bogotaCalendarDate(value));
     const value = (label, text) => `<div class="rp-dato"><span>${escapeHtml(label)}</span><strong>${escapeHtml(text)}</strong></div>`;
     const table = (headers, rows, empty) => `<div class="rp-table-wrap"><table class="rp-table"><thead><tr>${headers.map(item => `<th>${escapeHtml(item)}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${headers.length}" class="rp-empty">${escapeHtml(empty)}</td></tr>`}</tbody></table></div>`;
     const selectAssignments = (field = 'assignment', options = dashboard.assignments) => `<label>Práctica<select name="${field}" required><option value="">Selecciona una práctica</option>${options.map(item => `<option value="${item._id}">${escapeHtml(`${assignmentName(item)} · ${assignmentStudent(item)} · ${item.institution?.name || ''}`)}</option>`).join('')}</select></label>`;
@@ -161,14 +169,57 @@
     }
 
     function activityResources(item) {
-        const links = [];
+        const cards = [];
         if (item.resourceUrl) {
-            links.push(`<a href="${escapeHtml(item.resourceUrl)}" target="_blank" rel="noopener noreferrer">Abrir enlace de apoyo</a>`);
+            cards.push(fileCard({ name: 'Enlace de apoyo', url: item.resourceUrl, external: true }));
         }
         for (const resource of item.resources || []) {
-            links.push(`<a href="${escapeHtml(resource.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(resource.name)}</a>`);
+            cards.push(fileCard(resource));
         }
-        return links.length ? `<div class="rp-activity-resources">${links.join('')}</div>` : '';
+        return cards.length ? `<div class="rp-file-card-list">${cards.join('')}</div>` : '';
+    }
+
+    function fileSizeText(size) {
+        const bytes = Number(size || 0);
+        if (!bytes) return '';
+        return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(2)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    }
+
+    function fileTypeText(name, mimeType, external) {
+        if (external) return 'Enlace';
+        const extension = String(name || '').split('.').pop();
+        if (extension && extension !== name && extension.length <= 6) return extension.toUpperCase();
+        if (mimeType === 'application/pdf') return 'PDF';
+        if (mimeType?.startsWith('image/')) return 'Imagen';
+        if (mimeType?.startsWith('video/')) return 'Video';
+        return 'Archivo';
+    }
+
+    function fileCard(resource) {
+        const name = resource.name || 'Archivo';
+        const url = resource.openUrl || resource.fileUrl || resource.url;
+        if (!url) return '';
+        const stored = url.startsWith('/api/workflow/');
+        const downloadUrl = resource.downloadUrl || (stored ? `${url}${url.includes('?') ? '&' : '?'}download=1` : '');
+        const mimeType = resource.mimeType || '';
+        const type = fileTypeText(name, mimeType, resource.external);
+        const preview = mimeType.startsWith('image/')
+            ? `<img src="${escapeHtml(url)}" alt="Vista previa de ${escapeHtml(name)}" loading="lazy">`
+            : mimeType === 'application/pdf'
+                ? `<iframe src="${escapeHtml(url)}#page=1&zoom=70&toolbar=0&navpanes=0&scrollbar=0" title="Vista previa de ${escapeHtml(name)}" loading="lazy" tabindex="-1"></iframe>`
+                : `<span class="rp-file-type-icon">${escapeHtml(type)}</span>`;
+        const size = fileSizeText(resource.sizeBytes);
+        const previewPanel = mimeType === 'application/pdf'
+            ? `<div class="rp-file-card-preview">${preview}</div>`
+            : `<a class="rp-file-card-preview" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${escapeHtml(name)}">${preview}</a>`;
+        return `<article class="rp-file-card"><div class="rp-file-card-info"><a class="rp-file-card-name" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(name)}</a><small>${escapeHtml(type)}${size ? ` \u00b7 ${escapeHtml(size)}` : ''}</small><div class="rp-file-card-actions"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Abrir</a>${downloadUrl ? `<a href="${escapeHtml(downloadUrl)}" download="${escapeHtml(name)}">Descargar</a>` : ''}</div></div>${previewPanel}</article>`;
+    }
+
+    function attachmentActions(name, includeLinks = false, accept = 'image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip') {
+        const sourceButtons = includeLinks ? `
+            <button type="button" class="rp-attachment-action" data-attachment-action="drive" title="Agregar enlace de Google Drive" aria-label="Agregar enlace de Google Drive"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8.2 3h5.1l7.3 12.6h-5.1L8.2 3ZM6.4 6.1 9 10.6 4.2 19H0l6.4-12.9ZM8.2 15.6h12.4L18 20H5.7l2.5-4.4Z"/></svg></button>
+            <button type="button" class="rp-attachment-action" data-attachment-action="youtube" title="Agregar enlace de YouTube" aria-label="Agregar enlace de YouTube"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4l6.3 3.6-6.3 3.6Z"/></svg></button>` : '';
+        return `<div class="rp-attachment-picker"><div class="rp-attachment-toolbar" aria-label="Adjuntar archivos o enlaces">${sourceButtons}<button type="button" class="rp-attachment-action" data-attachment-action="upload" title="Subir archivo" aria-label="Subir archivo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m0 0L7 8m5-5 5 5M4 15v5h16v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>${includeLinks ? '<button type="button" class="rp-attachment-action" data-attachment-action="link" title="Agregar enlace" aria-label="Agregar enlace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1 0l3-3A5 5 0 0 0 13 2.9l-1.7 1.7m2.7 6.4a5 5 0 0 0-7.1 0l-3 3A5 5 0 0 0 11 21.1l1.7-1.7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>' : ''}</div><input class="rp-resource-files rp-native-file-input" tabindex="-1" aria-hidden="true" name="${escapeHtml(name)}" type="file" multiple accept="${escapeHtml(accept)}"><div class="rp-file-previews" aria-live="polite"></div><small class="rp-selected-resources" aria-live="polite"></small></div>`;
     }
 
     function activityCover(item) {
@@ -197,13 +248,8 @@
     }
 
     function evidenceResources(items) {
-        const links = (items || []).map(item => {
-            const url = item.fileUrl || item.url;
-            if (!url) return '';
-            const target = item.fileUrl ? '' : ' target="_blank" rel="noopener noreferrer"';
-            return `<a href="${escapeHtml(url)}"${target}>${escapeHtml(item.name || 'Evidencia')}</a>`;
-        }).filter(Boolean);
-        return links.length ? `<div class="rp-activity-resources">${links.join('')}</div>` : '—';
+        const cards = (items || []).map(item => fileCard({ ...item, external: Boolean(item.url && !item.fileUrl) })).filter(Boolean);
+        return cards.length ? `<div class="rp-file-card-list">${cards.join('')}</div>` : '—';
     }
 
     function renderStudentEvidenceTasks() {
@@ -212,8 +258,8 @@
             const canSubmit = !submission || submission.status === 'requiere_cambios';
             const state = !submission ? 'Pendiente' : submission.status === 'aprobada' ? 'Aprobada' : submission.status === 'requiere_cambios' ? 'Requiere cambios' : 'En revision';
             const evidence = evidenceResources(submission?.evidence);
-            const fields = `<input type="hidden" name="task" value="${escapeHtml(task._id)}"><label>Fecha de la actividad<input name="date" type="date" required></label><label>Horas realizadas<input name="hours" type="number" min="0.1" max="24" step="0.1" value="${escapeHtml(submission?.hours || '')}" required></label><label>Actividad realizada<textarea name="activityDescription" maxlength="3000" required>${escapeHtml(submission?.activityDescription || '')}</textarea></label><label>Nombre del enlace<input name="name" maxlength="255" placeholder="Ej. Informe semanal"></label><label>Enlace de Drive o sitio web<input name="url" type="url" maxlength="2048" placeholder="https://..."></label><label>Archivos de evidencia<input class="rp-resource-files" name="files" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip"></label><small class="rp-resource-help">Puedes enviar un enlace y hasta 5 archivos, con un total de 20 MB.</small><small class="rp-selected-resources" aria-live="polite"></small>`;
-            return `<article class="rp-card"><small>Solicitada por ${escapeHtml(personName(task.advisor))}  -  Fecha limite: ${escapeHtml(dateText(task.dueDate))}</small><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.instructions)}</p><p>${statusPill(state)}</p>${submission ? `<p><strong>Horas enviadas:</strong> ${escapeHtml(submission.hours)}  -  ${escapeHtml(dateText(submission.date))}</p><p>${escapeHtml(submission.activityDescription)}</p>${evidence}${submission.reviewComment ? `<p><strong>Comentario del asesor:</strong> ${escapeHtml(submission.reviewComment)}</p>` : ''}` : ''}${canSubmit ? form('evidenceTaskSubmission', submission ? 'Completar cambios solicitados' : 'Enviar evidencia y horas', fields, submission ? 'Enviar nuevamente' : 'Enviar al asesor') : ''}</article>`;
+            const fields = `<input type="hidden" name="task" value="${escapeHtml(task._id)}"><label>Fecha de la actividad<input name="date" type="date" required></label><label>Horas realizadas<input name="hours" type="number" min="0.1" step="0.1" value="${escapeHtml(submission?.hours || '')}" required></label><label>Actividad realizada<textarea name="activityDescription" maxlength="3000" required>${escapeHtml(submission?.activityDescription || '')}</textarea></label><label>Nombre del enlace<input name="name" maxlength="255" placeholder="Ej. Informe semanal"></label><label>Enlace de Drive o sitio web<input name="url" type="url" maxlength="2048" placeholder="https://..."></label>${attachmentActions('files', true)}<small class="rp-resource-help">Puedes enviar un enlace y hasta 5 archivos, con un total de 20 MB.</small>`;
+            return `<article class="rp-card"><small>Solicitada por ${escapeHtml(personName(task.advisor))}  -  Fecha limite: ${escapeHtml(dateText(task.dueDate))}</small><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.instructions)}</p><p>${statusPill(state)}</p>${submission ? `<p><strong>Horas enviadas:</strong> ${escapeHtml(submission.hours)}  -  ${escapeHtml(dateText(submission.date))}</p><p>${escapeHtml(submission.activityDescription)}</p>${evidence}${submission.practiceLogComment ? `<p><strong>Comentario del docente:</strong> ${escapeHtml(submission.practiceLogComment)}</p>` : ''}${submission.reviewComment ? `<p><strong>Comentario del asesor:</strong> ${escapeHtml(submission.reviewComment)}</p>` : ''}` : ''}${canSubmit ? form('evidenceTaskSubmission', submission ? 'Completar cambios solicitados' : 'Enviar evidencia y horas', fields, submission ? 'Enviar nuevamente' : 'Enviar al asesor') : ''}</article>`;
         });
         pageContent('evidencias', titles.evidencias, cards || '<p class="rp-empty">Tu asesor aún no te ha solicitado evidencias.</p>');
     }
@@ -233,9 +279,9 @@
                 const [state, stateKind] = activityStatus(submission);
                 const subjectName = item.subject?.name || assignmentName(dashboard.assignments.find(a => String(a._id) === String(item.assignment?._id || item.assignment)));
                 const canSubmit = !submission || submission.status === 'requiere_cambios';
-                const fields = `<input type="hidden" name="activity" value="${escapeHtml(item._id)}"><label>Respuesta / bit\u00e1cora<textarea name="response" maxlength="10000" rows="4">${escapeHtml(submission?.response || '')}</textarea></label><label>Archivos de la entrega<input class="rp-resource-files" name="files" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip"></label><small class="rp-resource-help">Hasta 5 archivos y 20 MB en total.</small><small class="rp-selected-resources" aria-live="polite"></small>`;
+                const fields = `<input type="hidden" name="activity" value="${escapeHtml(item._id)}"><label>Respuesta / bit\u00e1cora<textarea name="response" maxlength="10000" rows="4">${escapeHtml(submission?.response || '')}</textarea></label>${attachmentActions('files')}<small class="rp-resource-help">Hasta 5 archivos y 20 MB en total.</small>`;
                 const feedback = submission?.feedback ? `<p class="rp-activity-feedback"><strong>Comentario del docente:</strong> ${escapeHtml(submission.feedback)}</p>` : '';
-                const sentFiles = submission ? `<div class="rp-activity-submission"><strong>Tu entrega</strong><p>${escapeHtml(submission.response || 'Sin respuesta escrita.')}</p>${evidenceResources(submission.evidence)}${feedback}</div>` : '';
+                const sentFiles = submission ? `<div class="rp-activity-submission"><strong>Tu entrega</strong><p>${escapeHtml(submission.response || 'Sin respuesta escrita.')}</p>${submission.score !== undefined && submission.score !== null ? `<p><strong>Calificaci\u00f3n:</strong> ${escapeHtml(submission.score)} / 5</p>` : ''}${evidenceResources(submission.evidence)}${feedback}</div>` : '';
                 const details = `<details class="rp-activity-details"><summary>Ver actividad <span aria-hidden="true">\u2192</span></summary><div class="rp-activity-detail"><p>${escapeHtml(item.instructions)}</p>${activityResources(item)}${sentFiles}${canSubmit ? form('submission', submission ? 'Completar cambios solicitados' : 'Entregar actividad', fields, submission ? 'Volver a enviar' : 'Enviar actividad') : ''}</div></details>`;
                 return `<article class="rp-activity-card">${activityCover(item)}<div class="rp-activity-card-body"><div class="rp-activity-card-heading"><h3>${escapeHtml(item.title)}</h3>${activityStatusPill(state, stateKind)}</div><p class="rp-activity-card-meta">${escapeHtml(subjectName)}${item.author ? ` \u00b7 ${escapeHtml(personName(item.author))}` : ''}</p><small class="rp-activity-card-date">${item.dueDate ? `Fecha l\u00edmite: ${escapeHtml(dateText(item.dueDate))}` : 'Sin fecha l\u00edmite'}</small>${details}</div></article>`;
             });
@@ -243,15 +289,15 @@
         } else if (id === 'evidencias') {
             const approvedAssignments = dashboard.assignments.filter(item => item.approvalStatus === 'aprobada');
             const logs = listRows(dashboard.logs, item => `<tr><td>${escapeHtml(dateText(item.date))}</td><td>${escapeHtml(assignmentName(item.assignment))}</td><td>${escapeHtml(item.hours)}</td><td>${escapeHtml(item.activityDescription)}</td><td>${statusPill(item.status)}</td><td>${escapeHtml(item.reviewComment || '—')}</td></tr>`);
-            const logFields = `${selectAssignments('assignment', approvedAssignments)}<label>Fecha<input name="date" type="date" required></label><label>Horas<input name="hours" type="number" min="0.1" max="24" step="0.1" required></label><label>Actividad realizada<textarea name="activityDescription" maxlength="3000" required></textarea></label>`;
+            const logFields = `${selectAssignments('assignment', approvedAssignments)}<label>Fecha<input name="date" type="date" required></label><label>Horas<input name="hours" type="number" min="0.1" step="0.1" required></label><label>Actividad realizada<textarea name="activityDescription" maxlength="3000" required></textarea></label>`;
             const practiceCards = listRows(approvedAssignments, assignment => {
                 const programId = String(assignment.program?._id || assignment.program || '');
                 const directors = dashboard.programDirectors.filter(item => String(item.programId?._id || item.programId || '') === programId).map(personName);
                 const teachers = [...new Map([...(assignment.teachers || []), assignment.teacher].filter(Boolean).map(person => [String(person._id || person), person])).values()].map(personName);
                 const evidence = dashboard.practiceEvidences.filter(item => String(item.assignment?._id || item.assignment) === String(assignment._id));
-                const evidenceList = listRows(evidence, item => `<li>${escapeHtml(item.name)}${item.url ? ` · <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Abrir enlace</a>` : item.fileUrl ? ` · <a href="${escapeHtml(item.fileUrl)}">Descargar archivo</a>` : ''} · ${escapeHtml(dateText(item.submittedAt))}</li>`);
-                const fields = `<input type="hidden" name="assignment" value="${escapeHtml(assignment._id)}"><label>Nombre del enlace<input name="name" maxlength="255" placeholder="Ej. Informe semanal"></label><label>Enlace de Drive o sitio web<input name="url" type="url" maxlength="2048" placeholder="https://..."></label><label>Archivos, im&aacute;genes o videos<input class="rp-resource-files" name="files" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip"></label><small class="rp-resource-help">Hasta 5 archivos y 20 MB en total.</small><small class="rp-selected-resources" aria-live="polite"></small>`;
-                return `<article class="rp-card"><h3>${escapeHtml(assignmentName(assignment))}</h3><div class="rp-metrics">${value('Director', directors.join(', ') || 'Sin asignar')}${value('Docente(s)', teachers.join(', ') || 'Sin asignar')}${value('Asesor', personName(assignment.accompanimentResponsible))}</div><h4>Evidencias de práctica</h4><ul>${evidenceList || '<li>Aún no has cargado evidencias directas de la práctica.</li>'}</ul>${form('practiceEvidence', 'Agregar evidencia de práctica', fields, 'Guardar evidencia')}</article>`;
+                const evidenceList = evidenceResources(evidence);
+                const fields = `<input type="hidden" name="assignment" value="${escapeHtml(assignment._id)}"><label>Nombre del enlace<input name="name" maxlength="255" placeholder="Ej. Informe semanal"></label><label>Enlace de Drive o sitio web<input name="url" type="url" maxlength="2048" placeholder="https://..."></label>${attachmentActions('files', true)}<small class="rp-resource-help">Hasta 5 archivos y 20 MB en total.</small>`;
+                return `<article class="rp-card"><h3>${escapeHtml(assignmentName(assignment))}</h3><div class="rp-metrics">${value('Director', directors.join(', ') || 'Sin asignar')}${value('Docente(s)', teachers.join(', ') || 'Sin asignar')}${value('Asesor', personName(assignment.accompanimentResponsible))}</div><h4>Evidencias de práctica</h4>${evidenceList === '\u2014' ? '<p>Aun no has cargado evidencias directas de la practica.</p>' : evidenceList}${form('practiceEvidence', 'Agregar evidencia de práctica', fields, 'Guardar evidencia')}</article>`;
             });
             const submissions = listRows(dashboard.submissions, item => `<tr><td>${escapeHtml(item.activity?.title || 'Actividad')}</td><td>${escapeHtml(item.response || '—')}${evidenceResources(item.evidence)}</td><td>${statusPill(item.status)}</td><td>${escapeHtml(item.feedback || 'Sin retroalimentación')}</td><td>${escapeHtml(dateText(item.submittedAt))}</td></tr>`);
             const evidenceContent = `${approvedAssignments.length ? practiceCards : '<p class="rp-empty">Aún no tienes prácticas aprobadas. Cuando el Director apruebe una, podrás registrar horas y cargar evidencias.</p>'}${approvedAssignments.length ? form('log', 'Registrar horas de práctica', logFields, 'Guardar horas') : ''}${table(['Fecha', 'Práctica', 'Horas', 'Actividad', 'Estado', 'Revisión'], logs, 'Aún no hay horas registradas.') }<h3 class="rp-section-title">Entregas de actividades</h3>${table(['Actividad', 'Respuesta y evidencias', 'Estado', 'Comentario docente', 'Fecha'], submissions, 'Todavía no has enviado entregas de actividades.')}`;
@@ -262,7 +308,7 @@
             pageContent(id, titles[id], `${observations}${feedback}${observations || feedback ? '' : '<p class="rp-empty">Aún no hay retroalimentaciones.</p>'}`);
         } else if (id === 'informacion-proceso') {
             const rows = listRows(dashboard.logs, item => `<tr><td>${escapeHtml(dateText(item.date))}</td><td>${escapeHtml(item.hours)}</td><td>${escapeHtml(item.activityDescription)}</td><td>${statusPill(item.status)}</td><td>${escapeHtml(item.reviewComment || '—')}</td></tr>`);
-            const fields = `${selectAssignments()}<label>Fecha<input name="date" type="date" required></label><label>Horas<input name="hours" type="number" min="0.1" max="24" step="0.1" required></label><label>Actividad realizada<textarea name="activityDescription" maxlength="3000" required></textarea></label>`;
+            const fields = `${selectAssignments()}<label>Fecha<input name="date" type="date" required></label><label>Horas<input name="hours" type="number" min="0.1" step="0.1" required></label><label>Actividad realizada<textarea name="activityDescription" maxlength="3000" required></textarea></label>`;
             pageContent(id, titles[id], `${form('log', 'Registrar horas de práctica', fields, 'Guardar en bitácora')}${table(['Fecha', 'Horas', 'Actividad', 'Estado', 'Revisión'], rows, 'Aún no hay horas registradas.')}`);
         } else if (id === 'evaluaciones') {
             const tasks = dashboard.activities.filter(item => {
@@ -273,7 +319,7 @@
             const cards = listRows(tasks, item => {
                 const submission = dashboard.submissions.find(entry => String(entry.activity?._id || entry.activity) === String(item._id));
                 const canResubmit = !submission || submission.status === 'requiere_cambios';
-                const fields = `<input type="hidden" name="activity" value="${escapeHtml(item._id)}"><label>Respuesta<textarea name="response" maxlength="10000" rows="4" ${canResubmit ? '' : 'disabled'}>${escapeHtml(submission?.response || '')}</textarea></label><label>Archivos de la respuesta<input class="rp-resource-files" name="files" type="file" multiple ${canResubmit ? '' : 'disabled'} accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip"></label><small class="rp-resource-help">Hasta 5 archivos y 20 MB en total.</small><small class="rp-selected-resources" aria-live="polite"></small>`;
+                const fields = `<input type="hidden" name="activity" value="${escapeHtml(item._id)}"><label>Respuesta<textarea name="response" maxlength="10000" rows="4" ${canResubmit ? '' : 'disabled'}>${escapeHtml(submission?.response || '')}</textarea></label>${attachmentActions('files')}<small class="rp-resource-help">Hasta 5 archivos y 20 MB en total.</small>`;
                 const state = submission ? submission.status === 'requiere_cambios' ? 'Requiere cambios' : submission.status === 'aprobada' ? 'Revisada' : 'Entregada, pendiente de revisión' : 'Pendiente';
                 return `<article class="rp-card"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.instructions)}</p>${activityResources(item)}<p>${statusPill(state)} · Fecha límite: ${escapeHtml(dateText(item.dueDate))}</p>${submission?.feedback ? `<p>${escapeHtml(submission.feedback)}</p>` : ''}${evidenceResources(submission?.evidence)}${canResubmit ? form('submission', submission ? 'Volver a enviar evaluación' : 'Resolver evaluación', fields, submission ? 'Enviar nuevamente' : 'Enviar evaluación') : ''}</article>`;
             });
@@ -295,20 +341,42 @@
         } else if (id === 'actividades') {
             const subjects = dashboard.subjects || [];
             const subjectSelect = `<label>Asignatura<select name="subject" required><option value="">Selecciona una asignatura</option>${subjects.map(subject => `<option value="${subject._id}">${escapeHtml(`${subject.name} · Semestre ${subject.semester || '-'}`)}</option>`).join('')}</select></label>`;
-            const fields = `${subjectSelect}<label>Tipo<select name="kind" required><option value="actividad">Actividad</option><option value="evaluacion">Evaluación pendiente para el estudiante</option></select></label><label>Título<input name="title" maxlength="180" required></label><label>Instrucciones<textarea name="instructions" maxlength="5000" required></textarea></label><label>Fecha límite<input name="dueDate" type="date"></label><label>Enlace de apoyo (Drive, YouTube o sitio web)<input name="resourceUrl" type="url" maxlength="2048" placeholder="https://..."></label><label>Archivos o videos de apoyo<input class="rp-resource-files" name="resources" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip"></label><small class="rp-resource-help">Hasta 5 archivos y 20 MB en total. Para videos más grandes, agrega un enlace.</small><small class="rp-selected-resources" aria-live="polite"></small>`;
+            const fields = `${subjectSelect}<label>Tipo<select name="kind" required><option value="actividad">Actividad</option><option value="evaluacion">Evaluación pendiente para el estudiante</option></select></label><label>Título<input name="title" maxlength="180" required></label><label>Instrucciones<textarea name="instructions" maxlength="5000" required></textarea></label><label>Fecha límite<input name="dueDate" type="date"></label><label>Enlace de apoyo (Drive, YouTube o sitio web)<input name="resourceUrl" type="url" maxlength="2048" placeholder="https://..."></label>${attachmentActions('resources', true)}<small class="rp-resource-help">Hasta 5 archivos y 20 MB en total. Para videos más grandes, agrega un enlace.</small>`;
             const cards = listRows(dashboard.activities, item => {
                 const deliveries = dashboard.submissions.filter(entry => String(entry.activity?._id || entry.activity) === String(item._id));
                 const pending = deliveries.some(entry => entry.status === 'en_revision');
                 const state = pending ? ['En revisi\u00f3n', 'review'] : ['Publicada', 'published'];
                 const due = item.dueDate ? `Fecha l\u00edmite: ${escapeHtml(dateText(item.dueDate))}` : 'Sin fecha l\u00edmite';
-                const details = `<details class="rp-activity-details"><summary>Ver actividad <span aria-hidden="true">\u2192</span></summary><div class="rp-activity-detail"><p>${escapeHtml(item.instructions)}</p>${activityResources(item)}<p class="rp-activity-submission-count">${deliveries.length} ${deliveries.length === 1 ? 'entrega recibida' : 'entregas recibidas'}</p></div></details>`;
+                const deliveryCards = listRows(deliveries, entry => {
+                    const feedback = entry.feedback ? `<p class="rp-activity-feedback"><strong>Comentario anterior:</strong> ${escapeHtml(entry.feedback)}</p>` : '';
+                    const hasGrade = entry.score !== undefined && entry.score !== null;
+                    const gradeExpired = hasGrade && deadlinePassed(item.dueDate);
+                    const gradeEditor = `<form class="rp-review" data-submission="${escapeHtml(entry._id)}" data-activity="${escapeHtml(item._id)}" data-updating="${hasGrade ? 'true' : 'false'}" ${hasGrade ? 'hidden' : ''}><label>Calificaci\u00f3n (0 a 5)<input name="score" type="number" min="0" max="5" step="0.1" value="${escapeHtml(entry.score ?? '')}" required></label><label>Comentario (opcional)<textarea name="feedback" maxlength="5000" placeholder="Escribe un comentario">${escapeHtml(entry.feedback || '')}</textarea></label><button>${hasGrade ? 'Guardar cambios' : 'Guardar calificaci\u00f3n'}</button></form>`;
+                    const gradeControl = gradeExpired
+                        ? '<p class="rp-empty">La fecha l\u00edmite pas\u00f3. Esta calificaci\u00f3n ya no se puede editar.</p>'
+                        : `${hasGrade ? '<button type="button" class="rp-edit-grade">Editar calificaci\u00f3n</button>' : ''}${gradeEditor}`;
+                    return `<article class="rp-card"><small>${escapeHtml(dateText(entry.submittedAt))}</small><h4>${escapeHtml(personName(entry.student))}</h4><p>${escapeHtml(entry.response || 'Sin respuesta escrita.')}</p>${evidenceResources(entry.evidence)}<p>${statusPill(entry.status)}</p>${hasGrade ? `<p><strong>Calificaci\u00f3n:</strong> ${escapeHtml(entry.score)} / 5</p>` : ''}${feedback}${gradeControl}</article>`;
+                });
+                const details = `<details class="rp-activity-details" data-activity-details="${escapeHtml(item._id)}"><summary>Ver actividad <span aria-hidden="true">\u2192</span></summary><div class="rp-activity-detail"><p>${escapeHtml(item.instructions)}</p>${activityResources(item)}<p class="rp-activity-submission-count">${deliveries.length} ${deliveries.length === 1 ? 'entrega recibida' : 'entregas recibidas'}</p><h4>Entregas de estudiantes</h4>${deliveryCards || '<p class="rp-empty">Todav\u00eda no hay entregas.</p>'}</div></details>`;
                 return `<article class="rp-activity-card">${activityCover(item)}<div class="rp-activity-card-body"><div class="rp-activity-card-heading"><h3>${escapeHtml(item.title)}</h3>${activityStatusPill(state[0], state[1])}</div><p class="rp-activity-card-meta">${escapeHtml(item.subject?.name || assignmentName(item.assignment))} \u00b7 ${item.kind === 'evaluacion' ? 'Evaluaci\u00f3n' : 'Actividad'}</p><small class="rp-activity-card-date">${due}</small>${details}</div></article>`;
             });
             const createForm = `<details class="rp-activity-create"><summary>Crear actividad o evaluaci\u00f3n <span aria-hidden="true">+</span></summary>${form('activity', 'Nueva actividad', fields, 'Publicar')}</details>`;
             pageContent(id, titles[id], `${createForm}${cards ? `<div class="rp-activity-grid">${cards}</div>` : '<p class="rp-empty">A\u00fan no hay actividades publicadas.</p>'}`);
         } else if (id === 'evidencias') {
-            const rows = listRows(dashboard.submissions, item => `<tr><td>${escapeHtml(personName(item.student))}</td><td>${escapeHtml(item.activity?.title || 'Actividad')}</td><td>${escapeHtml(item.response || '—')}${evidenceResources(item.evidence)}</td><td>${statusPill(item.status)}</td><td><form class="rp-review" data-submission="${item._id}"><select name="status"><option value="aprobada">Aprobar</option><option value="requiere_cambios">Solicitar cambios</option></select><input name="feedback" maxlength="5000" placeholder="Retroalimentación" required><button>Guardar revisión</button></form></td></tr>`);
-            pageContent(id, titles[id], table(['Estudiante', 'Actividad', 'Entrega', 'Estado', 'Revisión'], rows, 'Aún no hay entregas recibidas.'));
+            const logs = dashboard.logs || [];
+            const taskFilesByLog = new Map();
+            (dashboard.evidenceTasks || []).forEach(task => {
+                const submission = task.submission;
+                if (!submission?.practiceLogId) return;
+                const key = String(submission.practiceLogId);
+                taskFilesByLog.set(key, [...(taskFilesByLog.get(key) || []), ...(submission.evidence || [])]);
+            });
+            const logCards = listRows(logs, log => {
+                const files = taskFilesByLog.get(String(log._id)) || [];
+                return `<article class="rp-card"><small>${escapeHtml(assignmentName(log.assignment))} \u00b7 ${escapeHtml(dateText(log.date))}</small><h3>${escapeHtml(personName(log.student))}</h3><p><strong>Horas:</strong> ${escapeHtml(log.hours)} h</p><p>${escapeHtml(log.activityDescription)}</p><p>${statusPill(log.status)}</p>${evidenceResources(files)}<form class="rp-log-comment" data-log="${escapeHtml(log._id)}"><label>Comentario visible para estudiante, asesor y director<textarea name="reviewComment" maxlength="2000" placeholder="Escribe un comentario">${escapeHtml(log.reviewComment || '')}</textarea></label><button type="submit">Guardar comentario</button></form></article>`;
+            });
+            const directEvidence = listRows(dashboard.practiceEvidences || [], file => `<article class="rp-card"><small>${escapeHtml(assignmentName(dashboard.assignments.find(item => String(item._id) === String(file.assignment?._id || file.assignment))))}</small><h3>${escapeHtml(personName(file.student))}</h3>${evidenceResources([file])}</article>`);
+            pageContent(id, titles[id], `${logCards || '<p class="rp-empty">Todav\u00eda no hay horas registradas.</p>'}${directEvidence}`);
         } else if (id === 'evaluaciones') {
             const students = dashboard.assignments.filter(item => item.student);
             const studentOptions = students.map(item => `<option value="${item.student._id}" data-assignment="${item._id}">${escapeHtml(personName(item.student))} · ${escapeHtml(assignmentName(item))}</option>`).join('');
@@ -328,10 +396,10 @@
             const state = !submission ? 'Esperando entrega' : submission.status === 'aprobada' ? 'Aprobada' : submission.status === 'requiere_cambios' ? 'Cambios solicitados' : 'Pendiente de revision';
             const evidence = evidenceResources(submission?.evidence);
             const review = submission?.status === 'en_revision'
-                ? `<form class="rp-evidence-review" data-evidence-submission="${escapeHtml(submission._id)}"><label>Comentario (opcional)<input name="reviewComment" maxlength="2000"></label><button type="submit" name="status" value="aprobada">Aprobar evidencia y horas</button><button type="submit" name="status" value="requiere_cambios">Solicitar cambios</button></form>`
-                : submission?.reviewComment ? `<p><strong>Comentario:</strong> ${escapeHtml(submission.reviewComment)}</p>` : '';
+                ? `<form class="rp-evidence-review rp-form" data-evidence-submission="${escapeHtml(submission._id)}"><label>Comentario (opcional)<textarea name="reviewComment" maxlength="2000" placeholder="Escribe un comentario para el estudiante">${escapeHtml(submission.reviewComment || '')}</textarea></label><button type="submit" name="action" value="comment">Guardar comentario</button><button type="submit" name="action" value="request_changes">Solicitar cambios</button></form>`
+                : submission?.reviewComment ? `<p><strong>Comentario del asesor:</strong> ${escapeHtml(submission.reviewComment)}</p>` : '';
             const delivery = submission
-                ? `<p><strong>Estudiante:</strong> ${escapeHtml(personName(student))}</p><p><strong>Fecha y horas:</strong> ${escapeHtml(dateText(submission.date))}  -  ${escapeHtml(submission.hours)} h</p><p>${escapeHtml(submission.activityDescription)}</p>${evidence}${review}`
+                ? `<p><strong>Estudiante:</strong> ${escapeHtml(personName(student))}</p><p><strong>Fecha y horas:</strong> ${escapeHtml(dateText(submission.date))}  -  ${escapeHtml(submission.hours)} h</p><p>${escapeHtml(submission.activityDescription)}</p>${evidence}${submission.practiceLogComment ? `<p><strong>Comentario del docente:</strong> ${escapeHtml(submission.practiceLogComment)}</p>` : ''}${review}`
                 : '<p>El estudiante aun no ha enviado esta evidencia.</p>';
             return `<article class="rp-card"><small>${escapeHtml(assignmentName(task.assignment))}  -  ${escapeHtml(personName(student))}</small><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.instructions)}</p><p>${statusPill(state)}  -  Fecha limite: ${escapeHtml(dateText(task.dueDate))}</p>${delivery}</article>`;
         });
@@ -364,7 +432,6 @@
             const students = options.students || [];
             const advisors = options.advisors || [];
             const institutions = options.institutions || [];
-            const practiceTypes = options.practiceTypes || [];
             const studentPrompt = 'Selecciona un estudiante';
             const studentOptions = students.map(student =>
                 `<option value="${escapeHtml(student._id)}" data-semester="${escapeHtml(student.semester)}">${escapeHtml(`${personName(student)} · Semestre ${student.semester}`)}</option>`
@@ -378,18 +445,13 @@
             const advisorOptions = advisors.map(advisor =>
                 `<option value="${escapeHtml(advisor._id)}">${escapeHtml(personName(advisor))}</option>`
             ).join('');
-            const typeOptions = practiceTypes.map(type =>
-                `<option value="${escapeHtml(type.name)}"></option>`
-            ).join('');
             const fields = `
-                <label>Tipo de práctica<input name="practiceType" list="rp-practice-types" maxlength="160" required><datalist id="rp-practice-types">${typeOptions}</datalist></label>
-                <label>Horas requeridas<input name="requiredHours" type="number" min="0.1" max="99999.9" step="0.1" required></label>
                 <label>Estudiante<select name="student" required><option value="">${studentPrompt}</option>${studentOptions}</select></label>
-                <label>Institución (mismo semestre)<select name="institution" required disabled><option value="">Selecciona una institución</option>${institutionOptions}</select></label>
-                <p class="rp-empty">Todos los docentes asignados por el Administrador al estudiante participarán en la práctica.</p>
+                <label>Instituci\u00f3n (mismo semestre)<select name="institution" required disabled><option value="">Selecciona una instituci\u00f3n</option>${institutionOptions}</select></label>
                 <label>Asesor asignado por el Director<select name="accompanimentResponsible" required><option value="">Selecciona un asesor</option>${advisorOptions}</select></label>
                 <label>Fecha de inicio<input name="startDate" type="date" required></label>
-                <label>Fecha de finalización<input name="endDate" type="date" required></label>
+                <label>Fecha de finalizaci\u00f3n<input name="endDate" type="date" required></label>
+                <label>Horas requeridas por el Director<input name="requiredHours" type="number" min="0.1" max="99999.9" step="0.1" required></label>
             `;
             const assignmentForm = students.length
                 ? form('assignment', 'Asignar práctica a estudiante', fields, 'Guardar práctica', 'rp-practice-form')
@@ -405,17 +467,46 @@
                 const subjectNames = subjects.map(subject => subject.name).join(', ') || 'Sin asignaturas';
                 const teachers = student.assignedTeachers || [];
                 const teacherNames = teachers.map(personName).join(', ') || 'Sin docente asignado';
-                const assignment = dashboard.assignments.find(item => String(item.student?._id) === String(student._id));
+                const studentId = String(student._id);
+                const studentAssignments = dashboard.assignments.filter(item => String(item.student?._id || item.student) === studentId);
+                const directorProgramId = dashboard.practiceOptions?.program?._id || dashboard.practiceOptions?.program;
+                const assignment = studentAssignments.find(item => String(item.program?._id || item.program || '') === String(directorProgramId || '')) || studentAssignments[0];
                 const practice = assignment
-                    ? `${assignmentName(assignment)} · ${assignment.institution?.name || 'Sin institución'}`
+                    ? `${assignmentName(assignment)} \u00b7 ${assignment.institution?.name || 'Sin instituci\u00f3n'}`
                     : [8, 9, 10].includes(Number(student.semester))
-                        ? 'Sin práctica asignada'
+                        ? 'Sin pr\u00e1ctica asignada'
                         : 'No tiene pr\u00e1cticas';
-                return `<tr><td>${escapeHtml(personName(student))}<small>${escapeHtml(student.email || '')}</small></td><td>${escapeHtml(student.semester)}</td><td>${escapeHtml(subjectNames)}</td><td>${escapeHtml(teacherNames)}</td><td>${escapeHtml(practice)}</td></tr>`;
+                const comments = [];
+                const addComment = (label, body, date) => {
+                    if (body && String(body).trim()) comments.push({ label, body: String(body).trim(), date });
+                };
+                const assignmentIds = new Set(studentAssignments.map(item => String(item._id)));
+                (dashboard.observations || []).filter(item => String(item.student?._id || item.student) === studentId).forEach(item => {
+                    const authorRole = item.author?.role === 'asesor' ? 'Asesor' : item.author?.role === 'docente' ? 'Docente' : 'Seguimiento';
+                    addComment(`${authorRole} \u00b7 ${personName(item.author)} \u00b7 ${item.category || 'Seguimiento'}`, item.body, item.observedAt);
+                });
+                (dashboard.logs || []).filter(item => assignmentIds.has(String(item.assignment?._id || item.assignment)) && item.reviewComment).forEach(item => {
+                    const authorRole = item.reviewedBy?.role === 'asesor' ? 'Asesor' : item.reviewedBy?.role === 'docente' ? 'Docente' : 'Responsable';
+                    addComment(`${authorRole} \u00b7 ${personName(item.reviewedBy)} \u00b7 Registro de horas`, item.reviewComment, item.date);
+                });
+                (dashboard.evidenceTasks || []).filter(task => assignmentIds.has(String(task.assignment?._id || task.assignment)) && task.submission?.reviewComment).forEach(task => {
+                    addComment(`Asesor \u00b7 ${personName(task.advisor)} \u00b7 ${task.title}`, task.submission.reviewComment, task.submission.submittedAt);
+                });
+                (dashboard.submissions || []).filter(item => String(item.student?._id || item.student) === studentId && item.feedback).forEach(item => {
+                    addComment(`Docente \u00b7 Actividad: ${item.activity?.title || 'Actividad'}`, item.feedback, item.submittedAt);
+                });
+                const uniqueComments = [...new Map(comments.map(comment => [`${comment.label}|${comment.body}`, comment])).values()];
+                const commentsView = uniqueComments.length
+                    ? `<details class="rp-student-comments"><summary>Leer comentarios de asesores y docentes (${uniqueComments.length})</summary>${uniqueComments.map(comment => `<article class="rp-card"><small>${escapeHtml(comment.label)} \u00b7 ${escapeHtml(dateText(comment.date))}</small><p>${escapeHtml(comment.body)}</p></article>`).join('')}</details>`
+                    : '<small>Sin comentarios de asesores o docentes.</small>';
+                const approval = assignment
+                    ? `<p>${statusPill(assignment.approvalStatus || 'pendiente')}</p><form class="rp-approval" data-assignment="${escapeHtml(assignment._id)}"><button type="submit" name="approvalStatus" value="aprobada">Aprobar pr\u00e1ctica</button><button type="submit" name="approvalStatus" value="rechazada">No aprobar pr\u00e1ctica</button></form>`
+                    : '<small>Asigna una pr\u00e1ctica antes de aprobarla.</small>';
+                return `<tr><td>${escapeHtml(personName(student))}<small>${escapeHtml(student.email || '')}</small></td><td>${escapeHtml(student.semester)}</td><td>${escapeHtml(subjectNames)}</td><td>${escapeHtml(teacherNames)}</td><td>${escapeHtml(practice)}${approval}${commentsView}</td></tr>`;
             });
             const content = dashboard.practiceOptionsError
                 ? `<p class="rp-empty">No se pudieron cargar los estudiantes: ${escapeHtml(dashboard.practiceOptionsError)}</p>`
-                : table(['Estudiante', 'Semestre', 'Asignaturas', 'Docentes', 'Práctica'], rows, 'No hay estudiantes activos que coincidan con el programa y semestre del Director.');
+                : table(['Estudiante', 'Semestre', 'Asignaturas', 'Docentes', 'Pr\u00e1ctica, aprobaci\u00f3n y comentarios'], rows, 'No hay estudiantes activos que coincidan con el programa y semestre del Director.');
             pageContent(id, titles[id], content);
         } else if (id === 'horas') {
             const rows = listRows(dashboard.logs, item => {
@@ -555,6 +646,37 @@
     }
 
     document.addEventListener('click', event => {
+        const editGradeButton = event.target.closest('.rp-edit-grade');
+        if (editGradeButton) {
+            const editor = editGradeButton.nextElementSibling;
+            editGradeButton.hidden = true;
+            if (editor) {
+                editor.hidden = false;
+                editor.querySelector('[name="score"]')?.focus();
+            }
+            return;
+        }
+        const attachmentAction = event.target.closest('[data-attachment-action]');
+        if (attachmentAction) {
+            event.preventDefault();
+            const picker = attachmentAction.closest('.rp-attachment-picker');
+            if (attachmentAction.dataset.attachmentAction === 'upload') {
+                picker?.querySelector('.rp-resource-files')?.click();
+            } else {
+                const urlInput = attachmentAction.closest('form')?.querySelector('input[type="url"]');
+                if (urlInput) {
+                    const placeholders = {
+                        drive: 'https://drive.google.com/...',
+                        youtube: 'https://www.youtube.com/...',
+                        link: 'https://...'
+                    };
+                    urlInput.placeholder = placeholders[attachmentAction.dataset.attachmentAction] || 'https://...';
+                    urlInput.focus();
+                    picker?.querySelectorAll('[data-attachment-action]').forEach(button => button.classList.toggle('activo', button === attachmentAction));
+                }
+            }
+            return;
+        }
         const button = event.target.closest('[data-vista]');
         if (button) {
             event.preventDefault();
@@ -573,10 +695,23 @@
     document.addEventListener('change', event => {
         const resourceInput = event.target.closest('.rp-resource-files');
         if (resourceInput) {
-            const summary = resourceInput.form.querySelector('.rp-selected-resources');
+            const picker = resourceInput.closest('.rp-attachment-picker');
+            const summary = picker?.querySelector('.rp-selected-resources');
+            const previews = picker?.querySelector('.rp-file-previews');
             const files = [...resourceInput.files];
             const totalSize = files.reduce((total, file) => total + file.size, 0);
-            summary.textContent = files.length
+            resourceInput._previewObjectUrls?.forEach(url => URL.revokeObjectURL(url));
+            resourceInput._previewObjectUrls = files.map(file => URL.createObjectURL(file));
+            if (previews) {
+                previews.innerHTML = files.map((file, index) => fileCard({
+                    name: file.name,
+                    mimeType: file.type,
+                    sizeBytes: file.size,
+                    openUrl: resourceInput._previewObjectUrls[index],
+                    downloadUrl: resourceInput._previewObjectUrls[index]
+                })).join('');
+            }
+            if (summary) summary.textContent = files.length
                 ? `${files.length} archivo(s) seleccionados · ${(totalSize / (1024 * 1024)).toFixed(2)} MB`
                 : '';
             return;
@@ -605,7 +740,7 @@
     document.addEventListener('submit', async event => {
         const target = event.target;
         if (!(target instanceof HTMLFormElement)) return;
-        if (target.matches('.rp-form')) {
+        if (target.matches('.rp-form[data-workflow-form]')) {
             event.preventDefault();
             const formData = new FormData(target);
             const fields = Object.fromEntries([...formData.entries()].filter(([name]) => !['resources', 'files'].includes(name)));
@@ -689,21 +824,35 @@
             const fields = Object.fromEntries(new FormData(target).entries());
             try {
                 const activeView = currentView();
+                const updatingGrade = target.dataset.updating === 'true';
+                const activityId = target.dataset.activity;
                 await api(`/api/workflow/submissions/${target.dataset.submission}/review`, { method: 'PATCH', body: JSON.stringify(fields) });
                 await loadDashboard();
                 render(activeView);
-                notify('La revisión se guardó correctamente.');
+                const activityDetails = [...document.querySelectorAll('[data-activity-details]')].find(details => details.dataset.activityDetails === activityId);
+                if (activityDetails) activityDetails.open = true;
+                notify(updatingGrade ? 'La calificaci\u00f3n se actualiz\u00f3 correctamente.' : 'La calificaci\u00f3n se guard\u00f3 correctamente.');
             } catch (error) { notify(error.message); }
         } else if (target.matches('.rp-evidence-review')) {
             event.preventDefault();
             const fields = Object.fromEntries(new FormData(target).entries());
-            fields.status = event.submitter?.value;
+            fields.action = event.submitter?.value;
             try {
                 const activeView = currentView();
                 await api(`/api/workflow/evidence-submissions/${target.dataset.evidenceSubmission}/review`, { method: 'PATCH', body: JSON.stringify(fields) });
                 await loadDashboard();
                 render(activeView);
                 notify('La revisiÃ³n de evidencia y horas se guardÃ³.');
+            } catch (error) { notify(error.message); }
+        } else if (target.matches('.rp-log-comment')) {
+            event.preventDefault();
+            const fields = Object.fromEntries(new FormData(target).entries());
+            try {
+                const activeView = currentView();
+                await api(`/api/workflow/logs/${target.dataset.log}/comment`, { method: 'PATCH', body: JSON.stringify(fields) });
+                await loadDashboard();
+                render(activeView);
+                notify('El comentario se guard\u00f3 y qued\u00f3 visible para los responsables de la pr\u00e1ctica.');
             } catch (error) { notify(error.message); }
         } else if (target.matches('.rp-review-log')) {
             event.preventDefault();

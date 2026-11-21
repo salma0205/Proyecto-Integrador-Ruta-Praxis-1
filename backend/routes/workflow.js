@@ -40,6 +40,27 @@ function badRequest(message) {
     return error;
 }
 
+function setStoredFileDisposition(req, res, name, mimeType) {
+    const previewable = mimeType === 'application/pdf' || mimeType === 'text/plain' ||
+        /^image\/(png|jpeg|gif|webp|bmp|avif)$/i.test(mimeType || '') ||
+        /^video\/(mp4|webm|ogg|quicktime)$/i.test(mimeType || '') ||
+        /^audio\/(mpeg|mp4|ogg|wav|webm)$/i.test(mimeType || '');
+    const disposition = req.query.download === '1' || !previewable ? 'attachment' : 'inline';
+    res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(name)}`);
+}
+
+function bogotaCalendarDate(value) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(new Date(value));
+    const part = type => parts.find(item => item.type === type)?.value || '';
+    return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function deadlineHasPassed(value) {
+    return Boolean(value && bogotaCalendarDate(Date.now()) > bogotaCalendarDate(value));
+}
+
 function requiredHoursOf(assignment) {
     const assignmentHours = Number(assignment.requiredHours);
     return assignmentHours > 0 ? assignmentHours : Number(assignment.practiceType?.requiredHours) || 0;
@@ -73,7 +94,6 @@ async function assignmentsFor(user) {
         }).select('_id');
         if (!students.length) return [];
         filter = {
-            program: program._id,
             student: { $in: students.map(student => student._id) }
         };
     }
@@ -210,10 +230,9 @@ router.get('/activities/:activityId/resources/:resourceId', requireRole('estudia
         if (!resource) return res.status(404).json({ error: 'No se encontró el archivo adjunto.' });
 
         const name = String(resource.NAME).replace(/[\r\n"]/g, '_');
-        const disposition = /^video\/(mp4|webm|ogg|quicktime)$/i.test(resource.MIME_TYPE) ? 'inline' : 'attachment';
         const contents = Buffer.from(resource.FILE_DATA, 'base64');
         res.setHeader('Content-Type', resource.MIME_TYPE);
-        res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(name)}`);
+        setStoredFileDisposition(req, res, name, resource.MIME_TYPE);
         res.setHeader('Content-Length', contents.length);
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.send(contents);
@@ -237,7 +256,7 @@ router.get('/practice-evidences/:assignmentId/:evidenceId/file', requireRole('es
         const name = String(evidence.NAME).replace(/[\r\n"]/g, '_');
         const contents = Buffer.from(evidence.FILE_DATA, 'base64');
         res.setHeader('Content-Type', evidence.MIME_TYPE || 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+        setStoredFileDisposition(req, res, name, evidence.MIME_TYPE);
         res.setHeader('Content-Length', contents.length);
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.send(contents);
@@ -252,7 +271,7 @@ router.get('/submissions/:submissionId/evidence/:evidenceId/file', requireRole('
         assertUuid(req.params.evidenceId, 'La evidencia');
         const submission = await Submission.findById(req.params.submissionId);
         if (!submission) return res.status(404).json({ error: 'No se encontró la entrega.' });
-        const activity = await Activity.findById(submission.activity).select('subject');
+        const activity = await Activity.findById(submission.activity).select('subject dueDate');
         let allowed = req.user.role === 'estudiante' && String(submission.student) === String(req.user._id);
         if (!allowed && submission.assignment) {
             allowed = Boolean(await ownedAssignment(req.user, submission.assignment, [req.user.role]));
@@ -271,7 +290,7 @@ router.get('/submissions/:submissionId/evidence/:evidenceId/file', requireRole('
         const name = String(evidence.NAME).replace(/[\r\n"]/g, '_');
         const contents = Buffer.from(evidence.FILE_DATA, 'base64');
         res.setHeader('Content-Type', evidence.MIME_TYPE || 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+        setStoredFileDisposition(req, res, name, evidence.MIME_TYPE);
         res.setHeader('Content-Length', contents.length);
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.send(contents);
@@ -295,7 +314,7 @@ router.get('/evidence-submissions/:submissionId/files/:fileId', requireRole('est
         const name = String(evidence.NAME).replace(/[\r\n"]/g, '_');
         const contents = Buffer.from(evidence.FILE_DATA, 'base64');
         res.setHeader('Content-Type', evidence.MIME_TYPE || 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+        setStoredFileDisposition(req, res, name, evidence.MIME_TYPE);
         res.setHeader('Content-Length', contents.length);
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.send(contents);
@@ -349,7 +368,6 @@ router.get('/practice-options', requireRole('director'), async (req, res, next) 
 router.post('/assignments', requireRole('director'), async (req, res, next) => {
     try {
         const {
-            practiceType,
             institution: institutionId,
             student: studentId,
             accompanimentResponsible: advisorId,
@@ -357,9 +375,8 @@ router.post('/assignments', requireRole('director'), async (req, res, next) => {
             endDate,
             requiredHours
         } = req.body || {};
-        const practiceName = typeof practiceType === 'string' ? practiceType.trim() : '';
         const hours = Number(requiredHours);
-        if (!practiceName || practiceName.length > 160 || !institutionId || !studentId || !advisorId || !startDate || !endDate ||
+        if (!institutionId || !studentId || !advisorId || !startDate || !endDate ||
             !Number.isFinite(hours) || hours <= 0 || hours > 99999.9) {
             throw badRequest('Completa los datos de la práctica, selecciona el asesor responsable e indica las horas requeridas (mayor que cero).');
         }
@@ -422,11 +439,10 @@ router.post('/assignments', requireRole('director'), async (req, res, next) => {
             throw badRequest('La institución debe estar asociada al mismo semestre del estudiante.');
         }
 
-        let type = await PracticeType.findOne({ name: practiceName, semester: Number(student.semester) });
-        if (type?.active === false) throw badRequest('Ese tipo de práctica está inactivo para el semestre seleccionado.');
+        let type = await PracticeType.findOne({ semester: Number(student.semester), active: true });
         if (!type) {
             type = await PracticeType.create({
-                name: practiceName,
+                name: 'Pr\u00e1ctica profesional',
                 semester: Number(student.semester),
                 active: true
             });
@@ -507,8 +523,8 @@ router.get('/dashboard', async (req, res, next) => {
         };
         const [submissions, logs, observations, evaluations, attendanceValidations] = await Promise.all([
             Submission.find(submissionFilter).sort({ submittedAt: -1 }).limit(250).populate('activity', 'title subject assignment').populate('assignment', 'student teacher').populate('student', 'firstName lastName email'),
-            PracticeLog.find({ assignment: { $in: assignmentIds } }).sort({ date: -1 }).limit(500).populate('assignment', 'student practiceType institution').populate('student', 'firstName lastName').populate('reviewedBy', 'firstName lastName'),
-            Observation.find({ assignment: { $in: assignmentIds }, ...(req.user.role === 'estudiante' ? { visibleToStudent: true } : {}) }).sort({ observedAt: -1 }).limit(250).populate('student', 'firstName lastName').populate('author', 'firstName lastName'),
+            PracticeLog.find({ assignment: { $in: assignmentIds } }).sort({ date: -1 }).limit(500).populate('assignment', 'student practiceType institution').populate('student', 'firstName lastName').populate('reviewedBy', 'firstName middleName lastName secondLastName role'),
+            Observation.find({ assignment: { $in: assignmentIds }, ...(req.user.role === 'estudiante' ? { visibleToStudent: true } : {}) }).sort({ observedAt: -1 }).limit(250).populate('student', 'firstName lastName').populate('author', 'firstName middleName lastName secondLastName role'),
             Evaluation.find({ assignment: { $in: assignmentIds } }).sort({ evaluatedAt: -1 }).limit(250).populate('assignment', 'student practiceType').populate('student', 'firstName lastName').populate('evaluator', 'firstName lastName'),
             AttendanceValidation.find({ assignment: { $in: assignmentIds } }).sort({ date: -1 }).limit(500).populate('assignment', 'student practiceType institution').populate('student', 'firstName lastName').populate('advisor', 'firstName lastName')
         ]);
@@ -537,7 +553,7 @@ router.get('/dashboard', async (req, res, next) => {
         }));
         const evidenceTaskRows = assignmentIds.length
             ? (await database.execute(
-                `SELECT task.id, task.assignment_id, task.advisor_id, task.title, task.instructions, task.due_date, task.status, task.created_at, submission.id AS submission_id, submission.student_id, submission.activity_date, submission.hours, submission.activity_description, submission.status AS submission_status, submission.review_comment, submission.submitted_at FROM practice_evidence_tasks task LEFT JOIN practice_evidence_submissions submission ON submission.task_id = task.id WHERE task.assignment_id IN (${assignmentIds.map((_, index) => `:evidenceAssignment${index}`).join(', ')}) ORDER BY task.created_at DESC`,
+                `SELECT task.id, task.assignment_id, task.advisor_id, task.title, task.instructions, task.due_date, task.status, task.created_at, submission.id AS submission_id, submission.practice_log_id, submission.student_id, submission.activity_date, submission.hours, submission.activity_description, submission.status AS submission_status, submission.review_comment, submission.submitted_at, practice_log.review_comment AS practice_log_comment FROM practice_evidence_tasks task LEFT JOIN practice_evidence_submissions submission ON submission.task_id = task.id LEFT JOIN practice_logs practice_log ON practice_log.id = submission.practice_log_id WHERE task.assignment_id IN (${assignmentIds.map((_, index) => `:evidenceAssignment${index}`).join(', ')}) ORDER BY task.created_at DESC`,
                 evidenceBinds
             )).rows
             : [];
@@ -578,6 +594,8 @@ router.get('/dashboard', async (req, res, next) => {
             createdAt: row.CREATED_AT,
             submission: row.SUBMISSION_ID ? {
                 _id: row.SUBMISSION_ID,
+                practiceLogId: row.PRACTICE_LOG_ID,
+                practiceLogComment: row.PRACTICE_LOG_COMMENT,
                 student: row.STUDENT_ID,
                 date: row.ACTIVITY_DATE,
                 hours: Number(row.HOURS),
@@ -877,9 +895,9 @@ router.post('/evidence-tasks/:taskId/submissions', requireRole('estudiante'), up
         const { date, hours, activityDescription, name = '', url = '' } = req.body || {};
         const activityDate = typeof date === 'string' ? new Date(`${date}T00:00:00`) : new Date(NaN);
         const numericHours = Number(hours);
-        if (Number.isNaN(activityDate.getTime()) || !Number.isFinite(numericHours) || numericHours < 0.1 || numericHours > 24 ||
+        if (Number.isNaN(activityDate.getTime()) || !Number.isFinite(numericHours) || numericHours < 0.1 ||
             typeof activityDescription !== 'string' || !activityDescription.trim() || activityDescription.trim().length > 3000) {
-            throw badRequest('Indica la fecha, las horas realizadas (0.1 a 24) y la actividad.');
+            throw badRequest('Indica una fecha, al menos 0.1 horas y la actividad realizada.');
         }
         if (typeof url !== 'string' || (url && (url.length > 2048 || !/^https?:\/\//i.test(url)))) {
             throw badRequest('El enlace debe ser una URL HTTP o HTTPS vÃ¡lida.');
@@ -917,8 +935,8 @@ router.post('/evidence-tasks/:taskId/submissions', requireRole('estudiante'), up
             practiceLog.reviewComment = '';
             await practiceLog.save();
             await database.execute(
-                "UPDATE practice_evidence_submissions SET activity_date = :date, hours = :hours, activity_description = :description, status = 'en_revision', review_comment = NULL, submitted_at = SYSTIMESTAMP, updated_at = SYSTIMESTAMP WHERE id = :id",
-                { date: activityDate, hours: numericHours, description: activityDescription.trim(), id: submissionId }
+                "UPDATE practice_evidence_submissions SET activity_date = :activityDate, hours = :hours, activity_description = :description, status = 'en_revision', review_comment = NULL, submitted_at = SYSTIMESTAMP, updated_at = SYSTIMESTAMP WHERE id = :id",
+                { activityDate, hours: numericHours, description: activityDescription.trim(), id: submissionId }
             );
             await database.execute('DELETE FROM practice_evidence_submission_files WHERE submission_id = :id', { id: submissionId });
         } else {
@@ -930,19 +948,24 @@ router.post('/evidence-tasks/:taskId/submissions', requireRole('estudiante'), up
                 activityDescription: activityDescription.trim()
             });
             submissionId = crypto.randomUUID();
-            await database.execute(
-                "INSERT INTO practice_evidence_submissions (id, task_id, assignment_id, student_id, practice_log_id, activity_date, hours, activity_description, status) VALUES (:id, :taskId, :assignmentId, :studentId, :practiceLogId, :date, :hours, :description, 'en_revision')",
-                {
-                    id: submissionId,
-                    taskId: task.ID,
-                    assignmentId: assignment._id,
-                    studentId: req.user._id,
-                    practiceLogId: practiceLog._id,
-                    date: activityDate,
-                    hours: numericHours,
-                    description: activityDescription.trim()
-                }
-            );
+            try {
+                await database.execute(
+                    "INSERT INTO practice_evidence_submissions (id, task_id, assignment_id, student_id, practice_log_id, activity_date, hours, activity_description, status) VALUES (:id, :taskId, :assignmentId, :studentId, :practiceLogId, :activityDate, :hours, :description, 'en_revision')",
+                    {
+                        id: submissionId,
+                        taskId: task.ID,
+                        assignmentId: assignment._id,
+                        studentId: req.user._id,
+                        practiceLogId: practiceLog._id,
+                        activityDate,
+                        hours: numericHours,
+                        description: activityDescription.trim()
+                    }
+                );
+            } catch (error) {
+                try { await PracticeLog.findByIdAndDelete(practiceLog._id); } catch {}
+                throw error;
+            }
         }
 
         const evidenceFiles = [
@@ -979,31 +1002,51 @@ router.patch('/evidence-submissions/:id/review', requireRole('asesor'), async (r
     try {
         assertUuid(req.params.id, 'La entrega de evidencia');
         const result = await database.execute(
-            'SELECT submission.id, submission.task_id, submission.practice_log_id, task.assignment_id FROM practice_evidence_submissions submission JOIN practice_evidence_tasks task ON task.id = submission.task_id WHERE submission.id = :id',
+            'SELECT submission.id, submission.task_id, submission.practice_log_id, submission.status AS submission_status, task.assignment_id FROM practice_evidence_submissions submission JOIN practice_evidence_tasks task ON task.id = submission.task_id WHERE submission.id = :id',
             { id: req.params.id }
         );
         const submission = result.rows[0];
-        if (!submission) return res.status(404).json({ error: 'No se encontrÃ³ la entrega de evidencia.' });
+        if (!submission) return res.status(404).json({ error: 'No se encontr\u00f3 la entrega de evidencia.' });
         const assignment = await ownedAssignment(req.user, submission.ASSIGNMENT_ID, ['asesor']);
         if (!assignment) return res.status(403).json({ error: 'No tienes permiso para revisar esta evidencia.' });
-        const { status, reviewComment = '' } = req.body || {};
-        if (!['aprobada', 'requiere_cambios'].includes(status) || typeof reviewComment !== 'string' || reviewComment.length > 2000) {
-            throw badRequest('Selecciona si apruebas la evidencia o solicitas cambios.');
+        if (submission.SUBMISSION_STATUS !== 'en_revision') {
+            return res.status(409).json({ error: 'Esta entrega ya no est\u00e1 pendiente de revisi\u00f3n.' });
         }
-        await database.execute(
-            'UPDATE practice_evidence_submissions SET status = :status, review_comment = :comment, updated_at = SYSTIMESTAMP WHERE id = :id',
-            { status, comment: reviewComment.trim(), id: submission.ID }
-        );
+        const { action, reviewComment = '' } = req.body || {};
+        if (!['comment', 'request_changes'].includes(action) || typeof reviewComment !== 'string' || reviewComment.length > 2000) {
+            throw badRequest('Guarda un comentario o solicita cambios con un comentario v\u00e1lido.');
+        }
+        if (action === 'request_changes' && !reviewComment.trim()) {
+            throw badRequest('Escribe un comentario para solicitar cambios.');
+        }
+        if (action === 'request_changes') {
+            await database.execute(
+                "UPDATE practice_evidence_submissions SET status = 'requiere_cambios', review_comment = :reviewComment, updated_at = SYSTIMESTAMP WHERE id = :id",
+                { reviewComment: reviewComment.trim(), id: submission.ID }
+            );
+        } else {
+            await database.execute(
+                'UPDATE practice_evidence_submissions SET review_comment = :reviewComment, updated_at = SYSTIMESTAMP WHERE id = :id',
+                { reviewComment: reviewComment.trim(), id: submission.ID }
+            );
+        }
         const practiceLog = await PracticeLog.findById(submission.PRACTICE_LOG_ID);
         if (practiceLog) {
-            practiceLog.status = status === 'aprobada' ? 'aprobada' : 'rechazada';
+            if (action === 'request_changes') practiceLog.status = 'pendiente';
             practiceLog.reviewedBy = req.user._id;
             practiceLog.reviewComment = reviewComment.trim();
             await practiceLog.save();
         }
         const studentId = assignment.student?._id || assignment.student;
-        await notifyStudents([studentId], req.user, 'practiceLog', 'Evidencia revisada', status === 'aprobada' ? 'Tu evidencia y las horas asociadas fueron aprobadas.' : `Tu evidencia requiere cambios.${reviewComment.trim() ? ` Comentario: ${reviewComment.trim()}` : ''}`, 'evidencias');
-        res.json({ data: { _id: submission.ID, status, reviewComment: reviewComment.trim() } });
+        const message = action === 'request_changes'
+            ? `Tu asesor solicit\u00f3 cambios en la evidencia.${reviewComment.trim() ? ` Comentario: ${reviewComment.trim()}` : ''}`
+            : `Tu asesor dej\u00f3 un comentario sobre la evidencia.${reviewComment.trim() ? ` Comentario: ${reviewComment.trim()}` : ''}`;
+        await notifyStudents(
+            [studentId], req.user, 'practiceLog',
+            action === 'request_changes' ? 'Cambios solicitados en tu evidencia' : 'Comentario del asesor sobre tu evidencia',
+            message, 'evidencias'
+        );
+        res.json({ data: { _id: submission.ID, status: action === 'request_changes' ? 'requiere_cambios' : submission.SUBMISSION_STATUS, reviewComment: reviewComment.trim() } });
     } catch (error) {
         next(error);
     }
@@ -1084,14 +1127,20 @@ router.patch('/submissions/:id/review', requireRole('docente', 'asesor'), async 
             })
             : null;
         if (!assignment && !subject) return res.status(403).json({ error: 'No tienes acceso a esta entrega.' });
-        const { status, feedback = '' } = req.body || {};
-        if (!['aprobada', 'requiere_cambios'].includes(status) || typeof feedback !== 'string' || feedback.length > 5000) {
-            throw badRequest('Selecciona un estado válido e ingresa una retroalimentación de hasta 5000 caracteres.');
+        if (submission.score !== undefined && submission.score !== null && deadlineHasPassed(activity?.dueDate)) {
+            return res.status(409).json({ error: 'La fecha l?mite pas?; esta calificaci?n ya no se puede editar.' });
         }
-        submission.status = status;
+        const { score, feedback = '' } = req.body || {};
+        const numericScore = Number(score);
+        if (score === '' || score === undefined || !Number.isFinite(numericScore) || numericScore < 0 || numericScore > 5 ||
+            typeof feedback !== 'string' || feedback.length > 5000) {
+            throw badRequest('Ingresa una calificaci\u00f3n entre 0 y 5 y un comentario de hasta 5000 caracteres.');
+        }
+        submission.status = 'aprobada';
+        submission.score = numericScore;
         submission.feedback = feedback.trim();
         await submission.save();
-        await notifyStudents([submission.student], req.user, 'submission', 'Entrega revisada', `${status === 'aprobada' ? 'Tu entrega fue aprobada.' : 'Tu entrega requiere cambios.'}${feedback.trim() ? ` Comentario: ${feedback.trim()}` : ''}`, 'evidencias');
+        await notifyStudents([submission.student], req.user, 'submission', 'Actividad calificada', `Recibiste una calificaci\u00f3n de ${numericScore}/5.${feedback.trim() ? ` Comentario: ${feedback.trim()}` : ''}`, 'mis-actividades');
         res.json({ data: submission });
     } catch (error) {
         next(error);
@@ -1119,7 +1168,32 @@ router.post('/logs', requireRole('estudiante'), async (req, res, next) => {
     }
 });
 
-router.patch('/logs/:id/review', requireRole('docente', 'asesor', 'director'), async (req, res, next) => {
+router.patch('/logs/:id/comment', requireRole('docente'), async (req, res, next) => {
+    try {
+        assertUuid(req.params.id, 'El registro de horas');
+        const log = await PracticeLog.findById(req.params.id);
+        if (!log) return res.status(404).json({ error: 'No se encontr\u00f3 el registro de horas.' });
+        const assignment = await ownedAssignment(req.user, log.assignment, ['docente']);
+        if (!assignment) return res.status(403).json({ error: 'No tienes acceso a este registro.' });
+        const { reviewComment = '' } = req.body || {};
+        if (typeof reviewComment !== 'string' || reviewComment.length > 2000) {
+            throw badRequest('El comentario debe tener m\u00e1ximo 2000 caracteres.');
+        }
+        log.reviewComment = reviewComment.trim();
+        log.reviewedBy = req.user._id;
+        await log.save();
+        await notifyStudents(
+            [log.student], req.user, 'practiceLog', 'Comentario sobre tus horas',
+            `Tu docente dej\u00f3 un comentario sobre tu registro de horas.${log.reviewComment ? ` Comentario: ${log.reviewComment}` : ''}`,
+            'evidencias'
+        );
+        res.json({ data: { _id: log._id, reviewComment: log.reviewComment } });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.patch('/logs/:id/review', requireRole('asesor', 'director'), async (req, res, next) => {
     try {
         assertUuid(req.params.id, 'El registro de horas');
         const log = await PracticeLog.findById(req.params.id);
@@ -1265,11 +1339,13 @@ router.patch('/assignments/:id/approval', requireRole('director'), async (req, r
             .populate('student', 'firstName lastName semester programId program');
         if (!assignment) return res.status(404).json({ error: 'No se encontró la asignación.' });
         const directorProgramId = req.user.programId?._id || req.user.programId;
-        if (String(assignment.program?._id || '') !== String(directorProgramId || '')) {
-            return res.status(403).json({ error: 'Solo el director del programa asignado a la práctica puede aprobarla.' });
-        }
-        const studentProgramMatches = String(assignment.student?.programId || '') === String(assignment.program?._id || '') ||
-            (!assignment.student?.programId && assignment.student?.program === assignment.program?.name);
+        const directorProgram = directorProgramId
+            ? await AcademicProgram.findOne({ _id: directorProgramId, active: true }).select('_id name')
+            : null;
+        const studentProgramMatches = Boolean(directorProgram) && (
+            String(assignment.student?.programId || '') === String(directorProgram._id) ||
+            (!assignment.student?.programId && assignment.student?.program === directorProgram.name)
+        );
         if (![8, 9, 10].includes(Number(assignment.student?.semester)) ||
             Number(assignment.student?.semester) !== Number(req.user.semester) ||
             !studentProgramMatches) {

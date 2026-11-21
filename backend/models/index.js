@@ -202,7 +202,7 @@ const PracticeLog = buildModel('PracticeLog', {
     defaults: { status: 'pendiente' }, enums: { status: ['pendiente', 'aprobada', 'rechazada'] },
     maxLength: { activityDescription: 3000, reviewComment: 2000 },
     validate(values) {
-        validate(Number(values.hours) >= 0.1 && Number(values.hours) <= 24, 'Las horas deben estar entre 0.1 y 24.');
+        validate(Number.isFinite(Number(values.hours)) && Number(values.hours) >= 0.1, 'Las horas deben ser iguales o mayores que 0.1.');
     },
     references: { assignment: 'PracticeAssignment', student: 'User', reviewedBy: 'User' }
 });

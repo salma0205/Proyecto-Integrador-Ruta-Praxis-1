@@ -136,6 +136,7 @@ Las asignaturas se registran únicamente con nombre y semestre. Desde **Gestiona
 El panel del Director y los indicadores administrativos se calculan a partir de registros Oracle, no de cifras de demostracion. Los archivos adjuntos de las actividades se guardan en Oracle; las evidencias del estudiante pueden compartirse mediante enlaces HTTP/HTTPS. Las notificaciones push, la agenda avanzada de visitas y las rúbricas configurables tambien quedan fuera del alcance implementado.
 
 En bases existentes, ejecuta una sola vez `@database\oracle\migrations\007_advisor_evidence_requests.sql` después de la migración 006. Habilita las solicitudes de evidencia del Asesor, las entregas de archivos o enlaces y las horas asociadas. Las instalaciones nuevas ya incluyen estas tablas en `schema.sql`.
+En bases existentes, ejecuta una sola vez `@database\oracle\migrations\008_remove_hours_cap.sql` para quitar el maximo de 24 horas por registro.
 
 En **Ver evidencias**, el estudiante solo ve solicitudes creadas por su Asesor. Cada entrega incluye archivos o un enlace, fecha, actividad y horas; el Asesor puede aprobarla o pedir cambios.
 

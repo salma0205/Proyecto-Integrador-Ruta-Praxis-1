@@ -11,7 +11,7 @@ const workflowRouter = require('./routes/workflow');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
-const host = process.env.HOST || '127.0.0.1';
+const host = process.env.HOST || '0.0.0.0';
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 if (process.env.CORS_ORIGIN) {
