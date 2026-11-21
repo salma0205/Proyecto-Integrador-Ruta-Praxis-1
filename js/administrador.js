@@ -89,10 +89,6 @@ function mapearUsuarioAdmin(usuario) {
             nombre: `${docente.firstName} ${docente.lastName}`,
             activo: docente.active
         })),
-        directorAsignado: usuario.assignedDirectors?.[0]?._id || '',
-        directorAsignadoNombre: usuario.assignedDirectors?.[0]
-            ? `${usuario.assignedDirectors[0].firstName} ${usuario.assignedDirectors[0].lastName}`
-            : '',
         programId: usuario.programId?._id || usuario.programId || '',
         rol: rolesUsuario[usuario.role] || usuario.role,
         semestre: usuario.semester ? [String(usuario.semester)] : [],
@@ -495,9 +491,9 @@ async function renderUsuarios() {
 
         document.getElementById('tabla-usuarios').innerHTML = usuarios.map(usuario => `
         <tr>
-            <td><strong>${escaparHtml(usuario.nombre)}</strong><small>${escaparHtml(usuario.programa || '')}${usuario.asignaturas?.length ? ` · ${escaparHtml(usuario.asignaturas.map(asignatura => `${asignatura.nombre} (${asignatura.semestre})`).join(', '))}` : ''}${usuario.docentesAsignados?.length ? ` · Docentes: ${escaparHtml(usuario.docentesAsignados.map(docente => docente.nombre).join(', '))}` : ''}${usuario.directorAsignadoNombre ? ` · Director: ${escaparHtml(usuario.directorAsignadoNombre)}` : ''}</small></td>
+            <td><strong>${escaparHtml(usuario.nombre)}</strong><small>${escaparHtml(usuario.programa || '')}${usuario.asignaturas?.length ? ` · ${escaparHtml(usuario.asignaturas.map(asignatura => `${asignatura.nombre} (${asignatura.semestre})`).join(', '))}` : ''}${usuario.docentesAsignados?.length ? ` · Docentes: ${escaparHtml(usuario.docentesAsignados.map(docente => docente.nombre).join(', '))}` : ''}</small></td>
             <td>${escaparHtml(usuario.correo || 'Sin correo')}</td>
-            <td>${escaparHtml(usuario.codigo || 'Sin codigo')}</td>
+            <td>${escaparHtml(usuario.codigo || 'Sin código')}</td>
             <td>${escaparHtml(usuario.rol)}</td>
             <td>${escaparHtml((usuario.semestre || []).join(', '))}</td>
             <td>${etiquetaEstado(usuario.activo)}</td>
@@ -539,7 +535,7 @@ async function exportarUsuariosCsv() {
         }
         const protegerFormula = valor => /^[\s]*[=+\-@]/.test(String(valor ?? '')) ? `'${valor}` : valor;
         const filas = [
-            ['Nombre', 'Correo o usuario', 'Código', 'Rol', 'Programa', 'Asignaturas', 'Docentes asignados', 'Director asignado', 'Semestre', 'Estado'],
+            ['Nombre', 'Correo o usuario', 'Código', 'Rol', 'Programa', 'Asignaturas', 'Docentes asignados', 'Semestre', 'Estado'],
             ...usuarios.map(usuario => [
                 usuario.nombre,
                 usuario.correo || usuario.nombreUsuario,
@@ -548,14 +544,13 @@ async function exportarUsuariosCsv() {
                 usuario.programa,
                 (usuario.asignaturas || []).map(asignatura => asignatura.nombre).join('; '),
                 (usuario.docentesAsignados || []).map(docente => docente.nombre).join('; '),
-                usuario.directorAsignadoNombre,
                 (usuario.semestre || []).join('; '),
                 usuario.activo ? 'Activo' : 'Inactivo'
             ])
         ];
-        const csv = '\uFEFF' + filas.map(fila => fila
+        const csv = '\uFEFFsep=;\r\n' + filas.map(fila => fila
             .map(valor => `"${String(protegerFormula(valor) ?? '').replace(/"/g, '""')}"`)
-            .join(','))
+            .join(';'))
             .join('\r\n');
         const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
         const enlace = document.createElement('a');
@@ -643,7 +638,7 @@ function datosDesdeElemento(elemento, tipo) {
     }
     if (tarjeta) {
         const texto = tarjeta.querySelector('p')?.textContent.trim() || '';
-        const codigo = tarjeta.dataset.codigo || (texto.match(/Codigo:\s*([^·]+)/)?.[1] || '').trim();
+        const codigo = tarjeta.dataset.codigo || (texto.match(/C[oó]digo:\s*([^·]+)/i)?.[1] || '').trim();
         const semestre = tarjeta.dataset.semestre || (texto.match(/Semestre:\s*(.+)$/)?.[1] || '').trim();
         if (tipo === 'programa') return datosProgramaDesdeTarjeta(tarjeta);
         if (tipo === 'institucion') {

@@ -19,8 +19,7 @@
                     <button class="opcion-menu activa" type="button" data-vista="inicio"><i class="fa-solid fa-house"></i><span>Inicio</span></button>
                     <button class="opcion-menu" type="button" data-vista="practicas"><i class="fa-solid fa-binoculars"></i><span>Gestionar prácticas</span></button>
                     <button class="opcion-menu" type="button" data-vista="estudiantes"><i class="fa-solid fa-users"></i><span>Consultar estudiantes</span></button>
-                    <button class="opcion-menu" type="button" data-vista="horas"><i class="fa-solid fa-clock"></i><span>Supervisar horas</span></button>
-                    <button class="opcion-menu" type="button" data-vista="evaluaciones"><i class="fa-solid fa-square-check"></i><span>Consultar evaluaciones</span></button>
+                    <button class="opcion-menu" type="button" data-vista="horas"><i class="fa-solid fa-clock"></i><span>Revisar horas</span></button>
                     <button class="opcion-menu" type="button" data-vista="perfil"><i class="fa-solid fa-circle-user"></i><span>Mi perfil</span></button>
                 </nav>
             </details>
@@ -31,22 +30,18 @@
 
 <section class="vista-asesor activa" id="inicio"><div class="encabezado"><p>Vista general</p><h2>Tablero del Director</h2><span>La informacion real se cargara desde Oracle Database.</span></div></section>
 
-            <section class="vista-asesor" id="practicas"><div class="encabezado"><p>Organización académica</p><h2>Gestionar prácticas</h2><span>Asigna prácticas a estudiantes de los semestres 8 a 10 en instituciones de su mismo semestre.</span></div><article class="bloque-consulta tabla-bloque"><div class="tabla-scroll"><table><thead><tr><th>Práctica</th><th>Institución</th><th>Estudiantes</th><th>Asesor</th><th>Avance</th><th>Estado</th></tr></thead><tbody id="filas-practicas"><tr><td colspan="6">Las prácticas se cargarán desde la base de datos.</td></tr></tbody></table></div></article></section>
+            <section class="vista-asesor" id="practicas"><div class="encabezado"><p>Organización académica</p><h2>Gestionar prácticas</h2><span>Asigna prácticas a estudiantes de tu programa y semestre, de 8.º a 10.º, en instituciones de su mismo semestre.</span></div><article class="bloque-consulta tabla-bloque"><div class="tabla-scroll"><table><thead><tr><th>Práctica</th><th>Institución</th><th>Estudiantes</th><th>Asesor</th><th>Avance</th><th>Estado</th></tr></thead><tbody id="filas-practicas"><tr><td colspan="6">Las prácticas se cargarán desde la base de datos.</td></tr></tbody></table></div></article></section>
 
-<section class="vista-asesor" id="estudiantes"><div class="encabezado"><p>Consulta academica</p><h2>Consultar estudiantes</h2><span>Consulta los estudiantes activos de tu programa y semestre, tengan practica o no.</span></div><article class="bloque-consulta"><p>Los estudiantes se cargaran desde la base de datos.</p></article></section>
+<section class="vista-asesor" id="estudiantes"><div class="encabezado"><p>Consulta academica</p><h2>Consultar estudiantes</h2><span>Los estudiantes activos de tu programa y semestre aparecen en tu consulta. Las prácticas y la asignación de asesores aplican de 8.º a 10.º semestre.</span></div><article class="bloque-consulta"><p>Los estudiantes se cargaran desde la base de datos.</p></article></section>
 
-<section class="vista-asesor" id="horas"><div class="encabezado"><p>Control de cumplimiento</p><h2>Supervisar horas de practicas</h2><span>Revisa las horas realizadas y gestiona las aprobaciones.</span></div><article class="bloque-consulta"><p>Las horas y aprobaciones se cargaran desde la base de datos.</p></article></section>
-
-<section class="vista-asesor" id="evaluaciones"><div class="encabezado"><p>Seguimiento academico</p><h2>Consultar evaluaciones</h2><span>Las evaluaciones se cargaran desde la base de datos.</span></div></section>
-
-
+            <section class="vista-asesor" id="horas"><div class="encabezado"><p>Seguimiento de prácticas</p><h2>Revisión de horas</h2><span>Revisa y aprueba las horas registradas por estudiantes con prácticas de tu programa.</span></div><article class="bloque-consulta tabla-bloque"><div class="tabla-scroll"><table><thead><tr><th>Estudiante</th><th>Práctica</th><th>Fecha</th><th>Horas</th><th>Actividad</th><th>Estado</th><th>Revisión</th></tr></thead><tbody><tr><td colspan="7">Las horas se cargarán desde la base de datos.</td></tr></tbody></table></div></article></section>
 
             <section class="vista-asesor" id="perfil"><div class="encabezado"><p>Configuracion personal</p><h2>Mi perfil</h2><span>Actualiza tu informacion de contacto.</span></div><form class="perfil-asesor-form bloque-consulta" id="form-perfil-director"><div class="foto-perfil"><div class="avatar-admin-perfil"><img data-profile-photo alt="Foto de perfil" hidden><span data-profile-initials>DR</span></div><label class="boton-secundario"><i class="fa-solid fa-camera"></i> Elegir foto<input data-profile-photo-input type="file" accept="image/jpeg,image/png,image/webp"></label></div><div class="datos-perfil"><h3>Informacion de contacto</h3><div><label>Nombre completo<input data-profile-full-name type="text" value="" readonly></label><label>Correo institucional<input data-profile-email type="email" value="" readonly></label><label>Correo personal<input data-profile-field="personalEmail" type="email" placeholder="Correo personal"></label><label>Telefono<input data-profile-field="phone" type="tel" placeholder="Telefono"></label></div><button class="boton-principal" type="submit"><i class="fa-solid fa-floppy-disk"></i> Guardar cambios</button></div></form></section>
         </section>
     </main>
     <div class="notificacion" id="notificacion"><i class="fa-solid fa-circle-check"></i><span></span></div>
     <script src="../js/auth.js?v=5"></script>
-    <script src="../js/workflow-dashboard.js?v=6"></script>
+    <script src="../js/workflow-dashboard.js?v=14"></script>
     <script src="../js/perfil.js?v=2"></script>
     <script src="../js/interacciones.js"></script>
 </body>

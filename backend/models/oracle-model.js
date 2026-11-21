@@ -147,13 +147,13 @@ function buildModel(name, fields, options = {}) {
             for (const [field, column] of Object.entries(this.fields)) {
                 if (data[field] === undefined || this.links[field]) continue;
                 columns.push(column);
-                binds[field] = convertValue(field, data[field], this);
+                binds[`v_${field}`] = convertValue(field, data[field], this);
             }
             if (!columns.includes('id')) columns.push('id');
-            binds.id = data.id;
-            if (this.fields.createdAt && !columns.includes('created_at')) { columns.push('created_at'); binds.createdAt = data.createdAt; }
-            if (this.fields.updatedAt && !columns.includes('updated_at')) { columns.push('updated_at'); binds.updatedAt = data.updatedAt; }
-            const sql = `INSERT INTO ${this.table} (${columns.join(', ')}) VALUES (${columns.map(column => `:${Object.keys(this.fields).find(key => this.fields[key] === column) || (column === 'id' ? 'id' : column === 'created_at' ? 'createdAt' : 'updatedAt')}`).join(', ')})`;
+            binds.v_id = data.id;
+            if (this.fields.createdAt && !columns.includes('created_at')) { columns.push('created_at'); binds.v_createdAt = data.createdAt; }
+            if (this.fields.updatedAt && !columns.includes('updated_at')) { columns.push('updated_at'); binds.v_updatedAt = data.updatedAt; }
+            const sql = `INSERT INTO ${this.table} (${columns.join(', ')}) VALUES (${columns.map(column => `:v_${Object.keys(this.fields).find(key => this.fields[key] === column) || (column === 'id' ? 'id' : column === 'created_at' ? 'createdAt' : 'updatedAt')}`).join(', ')})`;
             try {
                 await database.execute(sql, binds);
                 await this.writeLinks(data.id, data);
@@ -180,8 +180,16 @@ function buildModel(name, fields, options = {}) {
                 for (const value of values[field] || []) {
                     if (field === 'evidence') {
                         await database.execute(
-                            `INSERT INTO ${table} (id, ${ownerColumn}, name, url, mime_type, size_bytes) VALUES (:evidenceId, :id, :name, :url, :mimeType, :sizeBytes)`,
-                            { evidenceId: crypto.randomUUID(), id, name: value.name, url: value.url, mimeType: value.mimeType || null, sizeBytes: value.sizeBytes ?? null }
+                            `INSERT INTO ${table} (id, ${ownerColumn}, name, url, mime_type, size_bytes, file_data) VALUES (:evidenceId, :id, :name, :url, :mimeType, :sizeBytes, :fileData)`,
+                            {
+                                evidenceId: crypto.randomUUID(),
+                                id,
+                                name: value.name,
+                                url: value.url || null,
+                                mimeType: value.mimeType || null,
+                                sizeBytes: value.sizeBytes ?? null,
+                                fileData: value.fileData || null
+                            }
                         );
                     } else {
                         await database.execute(`INSERT INTO ${table} (${ownerColumn}, ${valueColumn}) VALUES (:id, :value)`, { id, value });
@@ -199,10 +207,17 @@ function buildModel(name, fields, options = {}) {
                     document[field] = result.rows.map(row => row.SUBJECT_ID);
                 } else if (field === 'evidence') {
                     const result = await database.execute(
-                        'SELECT name, url, mime_type, size_bytes FROM submission_evidence WHERE submission_id = :id ORDER BY id',
+                        'SELECT id, name, url, mime_type, size_bytes FROM submission_evidence WHERE submission_id = :id ORDER BY id',
                         { id: document._id }
                     );
-                    document[field] = result.rows.map(row => ({ name: row.NAME, url: row.URL, mimeType: row.MIME_TYPE, sizeBytes: row.SIZE_BYTES }));
+                    document[field] = result.rows.map(row => ({
+                        id: row.ID,
+                        name: row.NAME,
+                        url: row.URL,
+                        mimeType: row.MIME_TYPE,
+                        sizeBytes: row.SIZE_BYTES,
+                        ...(row.MIME_TYPE ? { fileUrl: `/api/workflow/submissions/${document._id}/evidence/${row.ID}/file` } : {})
+                    }));
                 } else {
                     const [table, ownerColumn, valueColumn] = info.table;
                     const result = await database.execute(`SELECT ${valueColumn} AS value FROM ${table} WHERE ${ownerColumn} = :id`, { id: document._id });

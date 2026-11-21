@@ -120,25 +120,43 @@ const PracticeAssignment = buildModel('PracticeAssignment', {
 
 const Activity = buildModel('Activity', {
     id: 'id', assignment: 'assignment_id', subject: 'subject_id', author: 'author_id',
-    title: 'title', instructions: 'instructions', dueDate: 'due_date', status: 'status',
+    kind: 'kind', title: 'title', instructions: 'instructions', dueDate: 'due_date', status: 'status',
     resourceUrl: 'resource_url', createdAt: 'created_at', updatedAt: 'updated_at'
 }, {
-    required: ['author', 'title', 'instructions'], defaults: { status: 'activa' },
-    enums: { status: ['programada', 'activa', 'finalizada'] },
-    maxLength: { title: 180, instructions: 5000, resourceUrl: 2048 },
+    required: ['author', 'title', 'instructions'], defaults: { status: 'activa', kind: 'actividad' },
+    maxLength: { kind: 20, title: 180, instructions: 5000, resourceUrl: 2048 },
+    enums: { status: ['programada', 'activa', 'finalizada'], kind: ['actividad', 'evaluacion'] },
     references: { assignment: 'PracticeAssignment', subject: 'AcademicSubject', author: 'User' }
 });
 
 const Submission = buildModel('Submission', {
     id: 'id', activity: 'activity_id', assignment: 'assignment_id', student: 'student_id',
-    response: 'response', feedback: 'feedback', submittedAt: 'submitted_at',
+    response: 'response', feedback: 'feedback', score: 'score', submittedAt: 'submitted_at',
     status: 'status', createdAt: 'created_at', updatedAt: 'updated_at'
 }, {
     required: ['activity', 'student'], defaults: { status: 'en_revision', submittedAt: new Date() },
     enums: { status: ['pendiente', 'en_revision', 'aprobada', 'requiere_cambios'] },
     maxLength: { response: 10000, feedback: 5000 },
+    validate(values) {
+        if (values.score !== undefined && values.score !== null) {
+            validate(Number(values.score) >= 0 && Number(values.score) <= 5, 'La calificación debe estar entre 0 y 5.');
+        }
+    },
     references: { activity: 'Activity', assignment: 'PracticeAssignment', student: 'User' },
     links: { evidence: { table: ['submission_evidence', 'submission_id', 'id'] } }
+});
+
+const PracticeEvidence = buildModel('PracticeEvidence', {
+    id: 'id', assignment: 'assignment_id', student: 'student_id', name: 'name',
+    url: 'url', mimeType: 'mime_type', sizeBytes: 'size_bytes', fileData: 'file_data',
+    submittedAt: 'submitted_at', createdAt: 'created_at', updatedAt: 'updated_at'
+}, {
+    required: ['assignment', 'student', 'name'],
+    maxLength: { name: 255, url: 2048, mimeType: 100 },
+    validate(values) {
+        validate(Boolean(values.url || values.fileData), 'La evidencia debe incluir un enlace o un archivo.');
+    },
+    references: { assignment: 'PracticeAssignment', student: 'User' }
 });
 
 const Observation = buildModel('Observation', {
@@ -242,7 +260,7 @@ const PasswordRecoveryRequest = buildModel('PasswordRecoveryRequest', {
 
 const models = {
     User, Institution, AcademicProgram, AcademicSubject, PracticeType, PracticeAssignment,
-    Activity, Submission, Observation, Evaluation, StudentNotification, PracticeLog,
+    Activity, Submission, PracticeEvidence, Observation, Evaluation, StudentNotification, PracticeLog,
     PracticeVisit, AttendanceValidation, AdminAudit, PasswordRecoveryRequest
 };
 

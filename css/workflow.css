@@ -27,6 +27,36 @@
 .rp-form button,.rp-review button,.rp-review-log button,.rp-approval button { width: fit-content; min-height: 38px; padding: 8px 13px; border: 0; border-radius: 6px; color: #071827; background: #7ddcff; font-size: 13px; font-weight: 700; }
 .rp-activity-resources { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
 .rp-activity-resources a { color: #7ddcff; font-size: 13px; text-decoration: underline; }
+.rp-activity-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,280px),1fr)); gap: 16px; align-items: start; }
+.rp-activity-card { min-width: 0; overflow: hidden; border: 1px solid rgba(144,221,255,.24); border-radius: 9px; background: rgba(7,18,34,.84); box-shadow: 0 10px 28px rgba(0,0,0,.14); }
+.rp-activity-cover { position: relative; display: grid; min-height: 112px; place-items: center; color: #f2fbff; background: linear-gradient(120deg,#285870,#347b8b); }
+.rp-activity-cover--image { background: linear-gradient(120deg,#52616a,#7b7770); }
+.rp-activity-cover--video { background: linear-gradient(120deg,#245b58,#32847e); }
+.rp-activity-cover-icon { display: grid; width: 46px; height: 46px; place-items: center; }
+.rp-activity-cover-icon svg { width: 42px; height: 42px; }
+.rp-activity-cover > small { position: absolute; right: 12px; bottom: 10px; padding: 4px 8px; border-radius: 5px; color: #f2fbff; background: rgba(4,14,24,.72); font-size: 11px; }
+.rp-activity-card-body { display: grid; gap: 10px; padding: 16px; }
+.rp-activity-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.rp-activity-card-heading h3 { margin: 0; color: #fff; font-size: 16px; line-height: 1.35; }
+.rp-activity-card-meta,.rp-activity-card-date { margin: 0; color: rgba(240,248,255,.72); font-size: 12px; line-height: 1.45; }
+.rp-activity-status { flex: 0 0 auto; padding: 5px 9px; border-radius: 20px; color: #08202b; background: #d7e9f1; font-size: 11px; font-weight: 700; }
+.rp-activity-status--approved { background: #83e3b1; }
+.rp-activity-status--review { background: #f7d476; }
+.rp-activity-status--changes { color: #fff; background: #a63c4c; }
+.rp-activity-status--pending { background: #d7e9f1; }
+.rp-activity-status--published { background: #d7e9f1; }
+.rp-activity-details { border-top: 1px solid rgba(144,221,255,.14); padding-top: 10px; }
+.rp-activity-details > summary,.rp-activity-create > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #7ddcff; cursor: pointer; font-size: 13px; font-weight: 700; list-style: none; }
+.rp-activity-details > summary::-webkit-details-marker,.rp-activity-create > summary::-webkit-details-marker { display: none; }
+.rp-activity-details[open] > summary span { transform: rotate(90deg); }
+.rp-activity-detail { display: grid; gap: 12px; padding-top: 13px; }
+.rp-activity-detail > p { margin: 0; color: rgba(240,248,255,.88); font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+.rp-activity-submission { display: grid; gap: 8px; padding: 12px; border-radius: 7px; background: rgba(125,220,255,.07); }
+.rp-activity-submission > strong,.rp-activity-submission-count { color: #bdeeff; font-size: 12px; }
+.rp-activity-submission .rp-activity-feedback { color: rgba(240,248,255,.78); }
+.rp-activity-create { padding: 14px 16px; border: 1px solid rgba(144,221,255,.22); border-radius: 8px; background: rgba(7,18,34,.72); }
+.rp-activity-create[open] { display: grid; gap: 14px; }
+.rp-activity-create[open] > summary { padding-bottom: 11px; border-bottom: 1px solid rgba(144,221,255,.14); }
 .rp-resource-help,.rp-selected-resources { color: rgba(240,248,255,.7); font-size: 12px; }
 .rp-review,.rp-review-log,.rp-approval { display: grid; min-width: 170px; gap: 7px; }
 .rp-approval { grid-template-columns: repeat(2,minmax(0,1fr)); }

@@ -470,14 +470,8 @@ async function validateUserSubjectAssignments(data) {
 async function validateUserStudentAssignments(data) {
     if (data.role !== 'estudiante') return;
     const teacherIds = [...new Set((data.assignedTeachers || []).map(String).filter(Boolean))];
-    const directorIds = [...new Set((data.assignedDirectors || []).map(String).filter(Boolean))];
     if (!teacherIds.length) {
         const error = new Error('Asigna al menos un Docente al Estudiante.');
-        error.status = 400;
-        throw error;
-    }
-    if (directorIds.length > 1) {
-        const error = new Error('Un Estudiante puede tener como máximo un Director asignado.');
         error.status = 400;
         throw error;
     }
@@ -497,21 +491,6 @@ async function validateUserStudentAssignments(data) {
         const error = new Error('Cada Docente debe tener una asignatura activa del semestre del Estudiante.');
         error.status = 400;
         throw error;
-    }
-
-    if (directorIds.length === 1) {
-        const director = await User.findOne({
-            _id: directorIds[0],
-            role: 'director',
-            active: true,
-            programId: data.programId,
-            semester: Number(data.semester)
-        }).select('_id');
-        if (!director) {
-            const error = new Error('El Director debe estar activo y corresponder al mismo programa y semestre del Estudiante.');
-            error.status = 400;
-            throw error;
-        }
     }
 }
 

@@ -19,7 +19,7 @@ Dentro del alcance implementado quedan:
 - creacion de actividades docentes
 - entregas de estudiantes con evidencias por URL
 - revisiones, observaciones, horas y evaluaciones
-- registro de visitas del Tutor Académico y validación de asistencia y desempeño por el Asesor Pedagógico
+- seguimiento de prácticas y consulta de evidencias asignadas
 - informes CSV descargables para el Director
 - dashboard y indicadores por rol
 - historial de auditoria administrativa
@@ -102,6 +102,10 @@ Ejecuta una sola vez `@database\oracle\migrations\004_student_staff_assignments.
 
 Ejecuta una sola vez `@database\oracle\migrations\005_activity_resources.sql` en bases existentes, después de la migración 004. Esta migración crea el almacenamiento Oracle de archivos adjuntos a actividades. Las instalaciones nuevas ya incluyen esta tabla en `schema.sql`.
 
+Ejecuta una sola vez `@database\oracle\migrations\006_student_workflows.sql` en bases existentes, después de la migración 005. Habilita actividades evaluativas, carga de archivos en entregas y evidencias directas de prácticas. Las instalaciones nuevas ya incluyen estos cambios en `schema.sql`.
+
+En el panel del estudiante, **Mis actividades** muestra las actividades regulares, **Ver evidencias** reúne responsables, bitácora de horas, evidencias de práctica y entregas, y **Evaluaciones** muestra las evaluaciones publicadas por el docente que el estudiante debe responder. Las entregas y evidencias aceptan enlaces y hasta 5 archivos de 20 MB en total.
+
 ## Modelo de datos
 
 - `users`: datos personales y rol (`administrador`, `director`, `docente`, `asesor`, `estudiante`).
@@ -109,40 +113,45 @@ Ejecuta una sola vez `@database\oracle\migrations\005_activity_resources.sql` en
 - `institutions`: entidades de Bucaramanga vinculadas a un semestre entre 8 y 10.
 - `practicetypes`: tipos de practica, semestre y horas requeridas.
 - `practiceassignments`: asigna un tipo de practica a un estudiante, sus docentes responsables e institucion, con sus horas requeridas; puede incluir un asesor.
-- `program_directors`, `student_teachers` y `student_directors`: relacionan programas y estudiantes con sus responsables académicos.
-- `activities`: instrucciones publicadas por el docente para una asignacion.
+- `program_directors` y `student_teachers`: relacionan programas y estudiantes con sus responsables académicos. `student_directors` se conserva por compatibilidad con datos previos, pero el Director ve estudiantes que comparten su programa y semestre.
+- `activities`: actividades regulares o evaluaciones publicadas por el docente para una asignatura o práctica.
 - `submissions`: respuesta y referencias a evidencias entregadas por el estudiante.
+- `practice_evidences`: enlaces y archivos vinculados directamente a una práctica.
 - `observations`: observaciones de seguimiento realizadas por un docente.
 - `evaluations`: calificacion y retroalimentacion del docente.
 - `practicelogs`: horas y actividades registradas para dar seguimiento a la practica.
 - `practicevisits`: visitas de seguimiento documentadas por el docente/tutor para una práctica.
 - `attendancevalidations`: asistencia y valoración del desempeño del estudiante registradas por el asesor.
 
-Los registros relacionados se vinculan mediante identificadores UUID en Oracle. Las actividades aceptan enlaces HTTP/HTTPS y hasta 5 archivos de apoyo (incluidos documentos, imágenes y videos) con un máximo combinado de 20 MB. Para videos más grandes, utiliza un enlace compartido con permisos de acceso. Las evidencias que entrega el estudiante se registran mediante URL.
+Los registros relacionados se vinculan mediante identificadores UUID en Oracle. Las actividades aceptan enlaces HTTP/HTTPS y hasta 5 archivos de apoyo (incluidos documentos, imágenes y videos) con un máximo combinado de 20 MB. Para videos más grandes, utiliza un enlace compartido con permisos de acceso. Las evidencias que entrega el estudiante pueden ser enlaces HTTP/HTTPS o archivos de hasta 20 MB en total por envío.
 
 ## Roles y seguimiento academico
 
 El **Administrador** es un rol de soporte de la plataforma: crea y mantiene las cuentas de usuario y la configuracion academica. No reemplaza a los actores que realizan el seguimiento academico descritos en el proyecto. Los roles operativos habilitados son estudiante, docente, asesor y director; el Coordinador no se implementa en esta version.
 
-El Administrador registra instituciones con nombre, dirección en Bucaramanga y un semestre entre 8 y 10. El Director gestiona las prácticas de su programa, asignando estudiante, docente, institución, fechas y horas requeridas; solo puede seleccionar estudiantes activos de los semestres 8, 9 y 10, y la institución debe corresponder al semestre del estudiante. Las prácticas nuevas quedan pendientes de aprobación del Director asignado al programa. El docente puede publicar actividades y evaluaciones cuando la práctica está aprobada; las actividades admiten enlaces y archivos de apoyo. Los estudiantes pueden entregar respuestas y evidencias por URL, y registrar horas en su bitácora. Las entregas se consultan desde **Evidencias**; ya no hay secciones separadas de **Visitas** ni **Entregas** en el panel docente. El asesor registra para cada práctica la asistencia (presente, ausente o tardanza), una valoración de desempeño de 0 a 5 y comentarios. Docentes y asesores autorizados pueden registrar observaciones y validar horas. Cada panel obtiene los datos del usuario autenticado mediante `/api/workflow/dashboard`, con permisos comprobados en el servidor.
+El Administrador registra instituciones con nombre, dirección en Bucaramanga y un semestre entre 8 y 10. El Director ve estudiantes activos que comparten su programa y semestre, y gestiona prácticas solo para estudiantes de semestres 8, 9 y 10 que coincidan con su propio semestre, asignando docente, asesor, institución, fechas y horas requeridas; la institución debe corresponder al semestre del estudiante. El asesor seleccionado por el Director es quien verá al estudiante y sus evidencias en el panel de asesor. Las prácticas nuevas quedan pendientes de aprobación del Director asignado al programa. El docente puede publicar actividades regulares y evaluaciones pendientes para el estudiante; ambas admiten enlaces y archivos de apoyo. Los estudiantes pueden entregar sus respuestas con enlaces o archivos y registrar horas y evidencias directas de la práctica. Las entregas se consultan desde **Evidencias** en los paneles de Docente y Asesor. Docentes y asesores autorizados pueden validar horas. Cada panel obtiene los datos del usuario autenticado mediante `/api/workflow/dashboard`, con permisos comprobados en el servidor.
 
-Las asignaturas se registran únicamente con nombre y semestre. Desde **Gestionar usuarios**, cada Director tiene un programa y un semestre; un programa puede tener Directores de distintos semestres. Cada Estudiante tiene programa, semestre, una o más asignaturas de ese semestre y varios Docentes responsables. Los Docentes pueden tener asignaturas de varios semestres. La asignación directa del Estudiante a un Director no se configura en el formulario de usuarios; el Director solo consulta estudiantes que tengan una asignación directa vigente y coincidan con su programa y semestre. Al crear una práctica, el Director elige al estudiante y al Asesor; se vinculan automáticamente todos los docentes asignados a ese estudiante.
+Las asignaturas se registran únicamente con nombre y semestre. Desde **Gestionar usuarios**, cada Director tiene un programa académico y un semestre; en su consulta aparecen automáticamente los estudiantes activos que comparten ambos. Cada Estudiante tiene programa, semestre, una o más asignaturas de ese semestre y varios Docentes responsables. Los Docentes pueden tener asignaturas de varios semestres. Solo se pueden crear prácticas para estudiantes de semestres 8 a 10 que compartan programa y semestre con el Director; este elige a uno de ellos y le asigna un Asesor. Los estudiantes de semestres 1 a 7 no requieren práctica ni asesor. Al crear la práctica, se vinculan automáticamente todos los docentes asignados al estudiante.
 
 El panel del Director y los indicadores administrativos se calculan a partir de registros Oracle, no de cifras de demostracion. Los archivos adjuntos de las actividades se guardan en Oracle; las evidencias del estudiante pueden compartirse mediante enlaces HTTP/HTTPS. Las notificaciones push, la agenda avanzada de visitas y las rúbricas configurables tambien quedan fuera del alcance implementado.
+
+En bases existentes, ejecuta una sola vez `@database\oracle\migrations\007_advisor_evidence_requests.sql` después de la migración 006. Habilita las solicitudes de evidencia del Asesor, las entregas de archivos o enlaces y las horas asociadas. Las instalaciones nuevas ya incluyen estas tablas en `schema.sql`.
+
+En **Ver evidencias**, el estudiante solo ve solicitudes creadas por su Asesor. Cada entrega incluye archivos o un enlace, fecha, actividad y horas; el Asesor puede aprobarla o pedir cambios.
 
 ### Prueba manual del flujo principal
 
 Con cuentas de prueba, recorre el proceso en este orden:
 
-1. Crea un programa y registra un Director asignándole ese programa y un semestre desde **Gestionar usuarios**.
+1. Crea un programa y registra un Director asignándole ese programa desde **Gestionar usuarios**.
 2. Registra una asignatura con su nombre y semestre.
-3. Crea un Estudiante con ese programa y semestre, un Docente y un Asesor. Asigna uno o más docentes al estudiante desde **Gestionar usuarios** y asigna al docente la asignatura del semestre correspondiente.
+3. Crea un Estudiante con ese programa, un Docente y un Asesor. Elige un estudiante de semestre 8 a 10 para la práctica; asigna uno o más docentes y asignaturas del mismo semestre desde **Gestionar usuarios**.
 4. Registra una institución en Bucaramanga y vincúlala al semestre del estudiante.
 5. Entra como Director y crea la práctica para ese estudiante, con Asesor, institución, fechas y horas requeridas; luego apruébala. Los docentes se asignan automáticamente.
 6. Entra como Docente y publica una actividad con un enlace o un archivo de apoyo.
 7. Entra como Estudiante, entrega la actividad con un enlace compartido de Drive y registra horas.
 8. Entra como Docente y revisa la entrega desde **Evidencias**; luego como Docente o Asesor para validar las horas.
-9. Entra como Asesor y registra la asistencia y la valoración del desempeño del estudiante.
+9. Entra como Asesor y confirma que solo aparezcan los estudiantes y evidencias asignados por el Director.
 10. Entra como Director, consulta el informe y descarga el CSV.
 
 La suite automatizada valida modelos y reglas locales, pero este flujo debe repetirse con una base y cuentas de prueba antes de la demostración final.
@@ -193,7 +202,7 @@ En el inicio de sesión está la opción **¿Olvidaste tu usuario o contraseña?
 
 Los perfiles de administrador, director, docente, asesor y estudiante muestran el nombre real de la cuenta y permiten guardar correo personal, teléfono y una foto JPG, PNG o WEBP de hasta 5 MB en Oracle. Si no hay foto, se muestran las iniciales del nombre.
 
-En el panel administrador, usa **Programas académicos** para registrar el nombre de cada programa. En **Gestionar usuarios**, asigna programa y semestre a Directores y Estudiantes, así como asignaturas y docentes a los Estudiantes. El formulario ya no permite asignar directamente un Estudiante a un Director; por ello, el Director solo ve estudiantes que ya tengan esa relación registrada y que coincidan con su programa y semestre. Al registrar una práctica, el Director elige al estudiante y al Asesor.
+En el panel administrador, usa **Programas académicos** para registrar el nombre de cada programa. En **Gestionar usuarios**, asigna un programa a Directores y Estudiantes, y semestre, asignaturas y docentes a los Estudiantes. El Director verá automáticamente a los estudiantes de su programa; al registrar prácticas para estudiantes de semestres 8 a 10, también les asigna un Asesor.
 
 El inicio del administrador incluye una lista de configuración inicial y un historial persistente de altas, cambios, activaciones, desactivaciones y eliminaciones hechos desde las rutas de administración. La tabla de usuarios permite buscar, filtrar por estado, rol y programa, recorrer páginas de diez cuentas y exportar los resultados filtrados a CSV.
 

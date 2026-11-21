@@ -5,6 +5,8 @@ const {
     AcademicProgram,
     AcademicSubject,
     PracticeAssignment,
+    Activity,
+    PracticeEvidence,
     PracticeVisit,
     AttendanceValidation,
     Evaluation,
@@ -13,6 +15,29 @@ const {
 } = require('./index');
 const { compileFilter, project } = require('./oracle-model');
 const database = require('../config/database');
+
+test('las actividades distinguen evaluaciones y las evidencias requieren enlace o archivo', async () => {
+    const activity = {
+        author: 'teacher-id',
+        title: 'Evaluación de práctica',
+        instructions: 'Completa y entrega',
+        kind: 'evaluacion'
+    };
+    await assert.doesNotReject(Activity.validateValues(activity));
+    await assert.rejects(Activity.validateValues({ ...activity, kind: 'otro' }), { name: 'ValidationError' });
+
+    await assert.rejects(PracticeEvidence.validateValues({
+        assignment: 'assignment-id',
+        student: 'student-id',
+        name: 'Informe'
+    }), { name: 'ValidationError' });
+    await assert.doesNotReject(PracticeEvidence.validateValues({
+        assignment: 'assignment-id',
+        student: 'student-id',
+        name: 'Informe',
+        fileData: 'YQ=='
+    }));
+});
 
 test('el modelo Oracle acepta roles académicos y rechaza roles no admitidos', async () => {
     for (const role of ['administrador', 'estudiante', 'asesor', 'director', 'docente']) {
@@ -283,6 +308,23 @@ test('el filtro Oracle compila booleanos, relaciones muchos-a-muchos y búsqueda
     assert.match(query.where, /subject_teachers/);
     assert.match(query.where, /REGEXP_LIKE/);
     assert.deepEqual(Object.values(query.binds), [1, 'subject-a', 'subject-b', 'ada', 'ada']);
+});
+
+test('el filtro Oracle admite programas vinculados y nombres heredados sin identificador', () => {
+    const query = compileFilter(User, {
+        role: 'estudiante',
+        active: true,
+        semester: 8,
+        $or: [
+            { programId: 'program-id' },
+            { programId: null, program: 'ACADEMICO' }
+        ]
+    });
+
+    assert.match(query.where, /t\.program_id = :b\d+/);
+    assert.match(query.where, /t\.program_id IS NULL/);
+    assert.match(query.where, /t\.program_name = :b\d+/);
+    assert.deepEqual(Object.values(query.binds), ['estudiante', 1, 8, 'program-id', 'ACADEMICO']);
 });
 
 test('los filtros Oracle reconocen las asignaciones académicas y las prácticas compartidas', () => {
